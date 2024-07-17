@@ -4,20 +4,20 @@
 #include <stdio.h>
 
 void printOperand(struct operandArgs *op) {
-	if(op->type == valueLitType) printf("$%d", op->literal);
-	else if(op->type == valueSymType) printf("$%s", op->symbol);
-	else if(op->type == litType) printf("%d", op->literal);
-	else if(op->type == symType) printf("%s", op->symbol);
-	else if(op->type == regType) printf("%%r%d", op->regNum);
-	else if(op->type == regMemType) printf("[%%r%d]", op->regNum);
-	else if(op->type == regMemLitType) printf("[%%r%d + %d]", op->regNum, op->literal);
-	else if(op->type == regMemSymType) printf("[%%r%d + %s]", op->regNum, op->symbol);
-	else if(op->type == litJumpType) printf("%d", op->literal);
-	else if(op->type == symJumpType) printf("%s", op->symbol);
+    if(op->type == valueLitType) printf("$%d", op->literal);
+    else if(op->type == valueSymType) printf("$%s", op->symbol);
+    else if(op->type == litType) printf("%d", op->literal);
+    else if(op->type == symType) printf("%s", op->symbol);
+    else if(op->type == regType) printf("%%r%d", op->regNum);
+    else if(op->type == regMemType) printf("[%%r%d]", op->regNum);
+    else if(op->type == regMemLitType) printf("[%%r%d + %d]", op->regNum, op->literal);
+    else if(op->type == regMemSymType) printf("[%%r%d + %s]", op->regNum, op->symbol);
+    else if(op->type == litJumpType) printf("%d", op->literal);
+    else if(op->type == symJumpType) printf("%s", op->symbol);
 }
 
 int main(int argc, char* argv[]) {
-	if (yyparse()) return 1;
+    if (yyparse()) return 1;
 
     for(struct line *currentLine = head; currentLine; currentLine = currentLine->next) {
         if(currentLine->directive) {
@@ -50,6 +50,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-	freeLines(head);
-	return 0;
+    freeLines(head);
+    return 0;
 }

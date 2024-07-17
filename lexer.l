@@ -11,7 +11,7 @@
 
 %%
 ".global" { return GLOBAL; }
-".extern"	{ return EXTERN; }
+".extern" { return EXTERN; }
 ".section" { return SECTION; }
 ".word" { return WORD; }
 ".skip" { return SKIP; }

@@ -8,11 +8,11 @@ struct line *tail = NULL;
 
 char *copyStr(const char *str) {
   if(str == NULL) return NULL;
-	int len = strnlen(str, 100);
-	char *buf = (char *) malloc(len + 1);
-	strncpy(buf, str, len);
-	buf[len] = '\0';
-	return buf;
+  int len = strnlen(str, 100);
+  char *buf = (char *) malloc(len + 1);
+  strncpy(buf, str, len);
+  buf[len] = '\0';
+  return buf;
 }
 
 char* removeFirstAndLastChar(const char* str) {
@@ -60,7 +60,7 @@ struct directive *makeDirective(const char *name, struct operandArgs *operands, 
   dir->name = copyStr(name);
   dir->operands = operands;
   dir->string = copyStr(string);
-	return dir;
+  return dir;
 }
 
 struct instruction *makeInstruction(const char *name, struct operandArgs *operand1, struct operandArgs *operand2, struct operandArgs *operand3) {
@@ -69,36 +69,36 @@ struct instruction *makeInstruction(const char *name, struct operandArgs *operan
   in->operand1 = operand1;
   in->operand2 = operand2;
   in->operand3 = operand3;
-	return in;
+  return in;
 }
 
 struct label *makeLabel(struct operandArgs *operand) {
   struct label *lab = (struct label *) malloc(sizeof(struct label));
   lab->operand = operand;
-	return lab;
+  return lab;
 }
 
 struct operandArgs *makeOperand(enum operandType type, int regNum, char *symbol, int literal) {
-	struct operandArgs* op = (struct operandArgs*) malloc(sizeof(struct operandArgs));
+  struct operandArgs* op = (struct operandArgs*) malloc(sizeof(struct operandArgs));
   op->type = type;
   op->regNum = regNum;
   op->symbol = copyStr(symbol);
   op->literal = literal;
   op->next = NULL;
-	return op;
+  return op;
 }
 
 
 void freeOperandArgs(struct operandArgs *op) {
-    struct operandArgs *current = op;
-    struct operandArgs *next;
-    
-    while(current != NULL) {
-        next = current->next;
-        if(current->symbol) free(current->symbol);
-        free(current);
-        current = next;
-    }
+  struct operandArgs *current = op;
+  struct operandArgs *next;
+  
+  while(current != NULL) {
+    next = current->next;
+    if(current->symbol) free(current->symbol);
+    free(current);
+    current = next;
+  }
 }
 
 void freeDirective(struct directive *dir) {

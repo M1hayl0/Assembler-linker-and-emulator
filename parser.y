@@ -10,9 +10,9 @@
 %defines "parser.h"
 
 %union {
-	int numLit;
-	char *strReg;
-	char *strSym;
+  int numLit;
+  char *strReg;
+  char *strSym;
   char *strAscii;
   
   struct directive *directive;

@@ -28,20 +28,20 @@ struct line {
 };
 
 struct directive {
-	char *name;
+  char *name;
   struct operandArgs *operands;
   char *string;
 };
 
 struct instruction {
-	char *name;
-	struct operandArgs *operand1;
-	struct operandArgs *operand2;
-	struct operandArgs *operand3;
+  char *name;
+  struct operandArgs *operand1;
+  struct operandArgs *operand2;
+  struct operandArgs *operand3;
 };
 
 struct label {
-	struct operandArgs *operand;
+  struct operandArgs *operand;
 };
 
 struct operandArgs {
