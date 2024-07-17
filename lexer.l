@@ -1,11 +1,13 @@
 %{
   #include <stdlib.h>
   #include <stdio.h>
-  #include "parser.tab.h"
-
-  int intVal;
-  char *stringVal;
+  #include "parser.h"
+  #include "helpers.h"
 %}
+
+%option outfile="lexer.c" header-file="lexer.h"
+
+%option noyywrap
 
 %%
 ".global" { return GLOBAL; }
@@ -42,10 +44,10 @@
 "st" { return ST; }
 "csrrd" { return CSRRD; }
 "csrwr" { return CSRWR; }
-r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { stringVal = yytext; return REG; }
-0x[0-9a-fA-F]+ { intVal = strtoul(yytext, NULL, 16); return LIT; }
-[0-9]+ { intVal = atoi(yytext); return LIT; }
-[a-zA-Z_][a-zA-Z0-9_]* { stringVal = yytext; return SYM; }
+r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { yylval.strReg = copyStr(yytext); return REG; }
+0x[0-9a-fA-F]+ { yylval.numLit = strtoul(yytext, NULL, 16); return LIT; }
+[0-9]+ { yylval.numLit = atoi(yytext); return LIT; }
+[a-zA-Z_][a-zA-Z0-9_]* { yylval.strSym = copyStr(yytext); return SYM; }
 "$" { return VALUE; }
 "%" { return REG_START; }
 "[" { return MEM_START; }
@@ -53,9 +55,13 @@ r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { stringVal = yytext; return REG;
 "+" { return PLUS; }
 "," { return COMMA; }
 ":" { return COLON; }
-\"(.*)\" { return STRING; }
+\"(.*)\" { yylval.strAscii = copyStr(yytext); return STRING; }
 \n { return EOL; }
 [ \t] { /* ignore whitespace */ }
 #(.*) { /* ignore comments */ }
 . { printf("Wrong text %c\n", *yytext); }
 %%
+
+void yyerror(const char *s) {
+  fprintf(stderr, "error: %s\n", s);
+}
