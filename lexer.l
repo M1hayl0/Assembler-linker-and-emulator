@@ -2,7 +2,7 @@
   #include <stdlib.h>
   #include <stdio.h>
   #include "parser.h"
-  #include "helpers.h"
+  #include "argumentTrasfer.h"
 %}
 
 %option outfile="lexer.c" header-file="lexer.h"
@@ -44,7 +44,8 @@
 "st" { return ST; }
 "csrrd" { return CSRRD; }
 "csrwr" { return CSRWR; }
-r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { yylval.strReg = copyStr(yytext); return REG; }
+r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { yylval.strReg = copyStr(yytext); return REGGPR; }
+status|handler|cause { yylval.strReg = copyStr(yytext); return REGCSR; }
 0x[0-9a-fA-F]+ { yylval.numLit = strtoul(yytext, NULL, 16); return LIT; }
 [0-9]+ { yylval.numLit = atoi(yytext); return LIT; }
 [a-zA-Z_][a-zA-Z0-9_]* { yylval.strSym = copyStr(yytext); return SYM; }
@@ -53,6 +54,7 @@ r(0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15)|sp|pc { yylval.strReg = copyStr(yytext)
 "[" { return MEM_START; }
 "]" { return MEM_END; }
 "+" { return PLUS; }
+"-" { return MINUS; }
 "," { return COMMA; }
 ":" { return COLON; }
 \"(.*)\" { yylval.strAscii = copyStr(yytext); return STRING; }

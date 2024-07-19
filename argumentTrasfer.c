@@ -1,4 +1,4 @@
-#include "helpers.h"
+#include "argumentTrasfer.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,6 +41,9 @@ int getRegNum(char *regName) {
   else if (strcmp(regName, "r13") == 0) return 13;
   else if (strcmp(regName, "r14") == 0 || strcmp(regName, "sp") == 0) return 14;
   else if (strcmp(regName, "r15") == 0 || strcmp(regName, "pc") == 0) return 15;
+  else if (strcmp(regName, "status") == 0) return 16;
+  else if (strcmp(regName, "handler") == 0) return 17;
+  else if (strcmp(regName, "cause") == 0) return 18;
   return -1;
 }
 
@@ -84,6 +87,7 @@ struct operandArgs *makeOperand(enum operandType type, int regNum, char *symbol,
   op->regNum = regNum;
   op->symbol = copyStr(symbol);
   op->literal = literal;
+  op->minus = 0;
   op->next = NULL;
   return op;
 }
@@ -138,5 +142,65 @@ void freeLines(struct line *linesHead) {
     freeLabel(current->label);
     free(current);
     current = next;
+  }
+}
+
+
+void printOperand(struct operandArgs *op) {
+  if(op->type == valueLitType) printf("$%d", op->literal);
+  else if(op->type == valueSymType) printf("$%s", op->symbol);
+  else if(op->type == litType) printf("%d", op->literal);
+  else if(op->type == symType) printf("%s", op->symbol);
+  else if(op->type == regType && op->regNum < 16) printf("%%r%d", op->regNum);
+  else if(op->type == regType && op->regNum == 16) printf("%%status");
+  else if(op->type == regType && op->regNum == 17) printf("%%handler");
+  else if(op->type == regType && op->regNum == 18) printf("%%cause");
+  else if(op->type == regMemType) printf("[%%r%d]", op->regNum);
+  else if(op->type == regMemLitType) printf("[%%r%d + %d]", op->regNum, op->literal);
+  else if(op->type == regMemSymType) printf("[%%r%d + %s]", op->regNum, op->symbol);
+  else if(op->type == litJumpType) printf("%d", op->literal);
+  else if(op->type == symJumpType) printf("%s", op->symbol);
+}
+
+void printLines(struct line *head) {
+  for(struct line *currentLine = head; currentLine; currentLine = currentLine->next) {
+    if(currentLine->directive) {
+      if(strcmp(currentLine->directive->name, ".global") == 0 ||
+        strcmp(currentLine->directive->name, ".extern") == 0 ||
+        strcmp(currentLine->directive->name, ".section") == 0 ||
+        strcmp(currentLine->directive->name, ".word") == 0 ||
+        strcmp(currentLine->directive->name, ".skip") == 0 ||
+        strcmp(currentLine->directive->name, ".end") == 0
+        ) {
+        printf("%s ", currentLine->directive->name);
+        for(struct operandArgs *curOp = currentLine->directive->operands; curOp; curOp = curOp->next) {
+          printOperand(curOp);
+          if(curOp->next) printf(", ");
+        }
+        printf("\n");
+      } else if (strcmp(currentLine->directive->name, ".ascii") == 0) {
+        printf("%s \"%s\"\n", currentLine->directive->name, currentLine->directive->string);
+      } else if (strcmp(currentLine->directive->name, ".equ") == 0) {
+        printf("%s ", currentLine->directive->name);
+        printOperand(currentLine->directive->operands);
+        printf(", ");
+        for(struct operandArgs *curOp = currentLine->directive->operands->next; curOp; curOp = curOp->next) {
+          if(curOp->minus == 0 && curOp != currentLine->directive->operands->next) printf(" + ");
+          else if(curOp->minus == 1 && curOp != currentLine->directive->operands->next) printf(" - ");
+          else if(curOp->minus == 1) printf("-");
+          printOperand(curOp);
+        }
+        printf("\n");
+      }
+    } else if(currentLine->instruction) {
+      printf("%s ", currentLine->instruction->name);
+      if(currentLine->instruction->operand1) printOperand(currentLine->instruction->operand1); 
+      if(currentLine->instruction->operand2) { printf(", "); printOperand(currentLine->instruction->operand2); }
+      if(currentLine->instruction->operand3) { printf(", "); printOperand(currentLine->instruction->operand3); }
+      printf("\n");
+    } else if(currentLine->label) {
+      printOperand(currentLine->label->operand);
+      printf(":\n");
+    }
   }
 }

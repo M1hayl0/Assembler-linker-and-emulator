@@ -2,8 +2,8 @@
 .extern sym5, sym8, sym9
 
 .section code
-.equ sym6, 0xFFFFFEFE
-.equ sym7, 10000 # this is comment
+.equ sym6, -sym1 + 0xFFFFFEFE
+.equ sym7, sym2 + 10000 + sym6 # this is comment
 .word sym1, 12345, sym2, 0x12345, 54321
 sym3:
     ld $sym6, %sp
@@ -20,8 +20,9 @@ sym3:
     xchg %r13, %r2
     add %r13, %r2
     bne %r11, %r2, sym7
-    csrwr %r1, %r3
-    csrrd %r3, %r1
+    csrwr %r2, %status
+    csrrd %cause, %r1
+    csrrd %handler, %r3
     call 10000
     sub %r12, %r2
     mul %r5, %r6

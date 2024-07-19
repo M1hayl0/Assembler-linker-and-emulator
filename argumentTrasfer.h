@@ -1,5 +1,5 @@
-#ifndef HELPERS_H
-#define HELPERS_H
+#ifndef ARGUMENTTRANSFER_H
+#define ARGUMENTTRANSFER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,6 +49,7 @@ struct operandArgs {
   int regNum;
   char *symbol;
   int literal;
+  int minus;
   struct operandArgs *next;
 };
 
@@ -71,8 +72,11 @@ void freeInstruction(struct instruction *);
 void freeLabel(struct label *);
 void freeLines(struct line *);
 
+void printOperand(struct operandArgs *);
+void printLines(struct line *);
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif // HELPERS_H
+#endif // ARGUMENTTRANSFER_H
