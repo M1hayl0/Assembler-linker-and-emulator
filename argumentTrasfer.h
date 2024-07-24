@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#include <stddef.h>
-
 enum operandType {
   valueLitType,
   valueSymType,

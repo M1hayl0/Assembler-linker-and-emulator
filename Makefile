@@ -1,8 +1,8 @@
 test: all
 	cat main.s | ./main
 
-all: main.cpp argumentTrasfer.c parser.c lexer.c argumentTrasfer.h
-	g++ main.cpp argumentTrasfer.c parser.c lexer.c -o main
+all: main.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp argumentTrasfer.h assembler.hpp
+	g++ main.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp -o main
 
 lexer.c: lexer.l argumentTrasfer.h
 	flex lexer.l
