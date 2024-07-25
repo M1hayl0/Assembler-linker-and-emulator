@@ -31,8 +31,8 @@ private:
   };
   
   enum relaType { 
-    R_X86_64_32, //symbol value + addend
-    R_X86_64_PC32  //symbol value + addend - offset
+    MY_R_X86_64_32S, //symbol value + addend
+    MY_R_X86_64_PC32  //symbol value + addend - offset
   };
 
   struct relaTableRow {
@@ -48,14 +48,18 @@ private:
     vector<uint8_t> sectionData8bitValues;
     int locationCounter;
     vector<relaTableRow> relaTable;
+    int symtabIndex;
   };
 
   vector<symbolTableRow> symbolTable;
   vector<sectionStruct> sections;
+
   struct line *code;
 
+  string outputFileName;
+
 public:
-  Assembler(struct line *);
+  Assembler(struct line *, char *outputFile);
   void assemble();
 
   void globalAssemble(struct directive *);
@@ -91,6 +95,8 @@ public:
   void printSymbolTable();
   void printRelaTables(const sectionStruct&);
   void printSections();
+
+  void elf();
 };
 
 #endif // ASSEMBLER_H

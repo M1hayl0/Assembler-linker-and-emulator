@@ -1,5 +1,6 @@
 test: all
-	cat main.s | ./main
+	./main -o output.o test.s
+	readelf -a output.o
 
 all: main.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp argumentTrasfer.h assembler.hpp
 	g++ main.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp -o main
