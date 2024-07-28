@@ -93,10 +93,10 @@ void Assembler::assemble() {
     }
   }
 
-  printSymbolTable();
-  printSections();
+  // printSymbolTable();
+  // printSections();
   
-  elf();
+  elfWrite();
 }
 
 
@@ -571,55 +571,11 @@ void Assembler::stAssemble(struct instruction *instruction) {
   sectionStruct &currentSection = sections.back();
 
   if(instruction->operand2->type == valueLitType) {
-    int instructionCode = makeInstructionCode(8, 0, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [pc+4]
-    push32BitValue(instructionCode, currentSection);
-    instructionCode = makeInstructionCode(3, 0, 15, 0, 0, 0, 0, 4); // jmp pc+4
-    push32BitValue(instructionCode, currentSection);
-    push32BitValue(instruction->operand2->literal, currentSection); // 32bit literal
+    printf("CAN'T USE STORE WITH IMMED\n");
+    exit(0);
   } else if(instruction->operand2->type == valueSymType) {
-    bool found = false;
-    for(auto &row : symbolTable) {
-      if(row.name == string(instruction->operand2->symbol) && row.defined) {
-        found = true;
-
-        int symbol = 0;
-        int addend = 0;
-        if(row.bind == LOC) {
-          symbol = sections[row.sectionIndex - 1].sectionNum;
-          addend = row.value;
-        } else if(row.bind == GLOB) {
-          symbol = row.num;
-        }
-        currentSection.relaTable.push_back({currentSection.locationCounter + 8, MY_R_X86_64_32S, symbol, addend});
-
-        int instructionCode = makeInstructionCode(8, 0, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [pc+4]
-        push32BitValue(instructionCode, currentSection);
-        instructionCode = makeInstructionCode(3, 0, 15, 0, 0, 0, 0, 4); // jmp pc+4
-        push32BitValue(instructionCode, currentSection);
-        push32BitValue(0, currentSection); // 32bit symbol
-        break;
-      } else if(row.name == string(instruction->operand2->symbol) && !row.defined) {
-        found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, row.head};
-        row.head = refsList;
-        int instructionCode = makeInstructionCode(8, 0, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [pc+4]
-        push32BitValue(instructionCode, currentSection);
-        instructionCode = makeInstructionCode(3, 0, 15, 0, 0, 0, 0, 4); // jmp pc+4
-        push32BitValue(instructionCode, currentSection);
-        push32BitValue(0, currentSection); // 32bit symbol
-        break;
-      }
-    }
-    
-    if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, nullptr};
-      symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand2->symbol), false, refsList});
-      int instructionCode = makeInstructionCode(8, 0, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [pc+4]
-      push32BitValue(instructionCode, currentSection);
-      instructionCode = makeInstructionCode(3, 0, 15, 0, 0, 0, 0, 4); // jmp pc+4
-      push32BitValue(instructionCode, currentSection);
-      push32BitValue(0, currentSection); // 32bit symbol
-    }
+    printf("CAN'T USE STORE WITH IMMED\n");
+    exit(0);
   } else if(instruction->operand2->type == litType) {
     int instructionCode = makeInstructionCode(8, 2, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [[pc+4]]
     push32BitValue(instructionCode, currentSection);
@@ -799,7 +755,7 @@ void Assembler::printRelaTables(const sectionStruct& section) {
   
   cout << string(50, '-') << endl;
 
-  for (const auto& row : section.relaTable) {
+  for(const auto& row : section.relaTable) {
     cout << left;
     printf("%08X  ", row.offset);
     cout << setw(20) << (row.type == MY_R_X86_64_32S ? "MY_R_X86_64_32S" : "MY_R_X86_64_PC32")
@@ -810,11 +766,11 @@ void Assembler::printRelaTables(const sectionStruct& section) {
 }
 
 void Assembler::printSections() {
-  for (const auto& section : sections) {
+  for(const auto& section : sections) {
     cout << "Section Number: " << section.sectionNum << endl;
     cout << "Section Name: " << section.sectionName << endl;
     cout << "Section Data (8-bit values): ";
-    for (const auto& val : section.sectionData8bitValues) {
+    for(const auto& val : section.sectionData8bitValues) {
       printf("%02X ", val);
     }
     cout << endl;
@@ -826,7 +782,7 @@ void Assembler::printSections() {
 }
 
 
-void Assembler::elf() {
+void Assembler::elfWrite() {
   ofstream ofs(outputFileName, ios::binary);
   if(!ofs) {
     cerr << "Failed to open file for writing." << endl;

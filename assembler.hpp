@@ -59,7 +59,7 @@ private:
   string outputFileName;
 
 public:
-  Assembler(struct line *, char *outputFile);
+  Assembler(struct line *, char *);
   void assemble();
 
   void globalAssemble(struct directive *);
@@ -96,7 +96,7 @@ public:
   void printRelaTables(const sectionStruct&);
   void printSections();
 
-  void elf();
+  void elfWrite();
 };
 
 #endif // ASSEMBLER_H
