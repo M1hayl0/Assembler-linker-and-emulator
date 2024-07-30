@@ -15,6 +15,7 @@ private:
 
   struct forwardRefsList {
     int patch;
+    int sectionToPatchNum;
     forwardRefsList *next;
   };
 

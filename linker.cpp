@@ -6,7 +6,8 @@
 #include <elf.h>
 #include <map>
 #include <vector>
-#include <string.h>
+#include <algorithm>
+#include <set>
 
 
 Linker::Linker(string outputFile, map<string, int> place, bool hex, bool relocatable, vector<string> inputFiles) {
@@ -23,7 +24,11 @@ void Linker::link() {
 
   mapping();
   symbolDetermination();
-  symbolResolution();
+  if(hex) symbolResolution();
+  else if(relocatable) makeRelocatableNewSections();
+
+  if(hex) hexWrite();
+  else if(relocatable) elfWrite();
 }
 
 void Linker::elfRead(string inputFileName) {
@@ -181,21 +186,400 @@ void Linker::elfRead(string inputFileName) {
   ifs.close();
 }
 
-
 void Linker::mapping() {
+  for(auto &file : inputFilesSections) {
+    for(auto &sectionToMap : file.sections) {
+      bool found = false;
+      for(auto &currentSection : mappedLinkedSections) {
+        if(place.find(sectionToMap.sectionName) != place.end()) {
+          if(sectionToMap.sectionName == currentSection.sectionName) {
+            sectionToMap.addressInLinkedSection = currentSection.size;
+            currentSection.size += sectionToMap.locationCounter;
+            found = true;
+            break;
+          }
+        } else {
+          if(!found && sectionToMap.sectionName == currentSection.sectionName) {
+            sectionToMap.addressInLinkedSection = currentSection.size;
+            currentSection.size += sectionToMap.locationCounter;
+            notFixedSectionsTotalSize += sectionToMap.locationCounter;
+            found = true;
+          } else if(found) {
+            currentSection.startAddress += sectionToMap.locationCounter;
+          }
+        }
+      }
 
+      if(!found) {
+        if(place.find(sectionToMap.sectionName) != place.end()) {
+          mappedLinkedSections.push_back({sectionToMap.sectionName, place[sectionToMap.sectionName], sectionToMap.locationCounter});
+          sectionToMap.addressInLinkedSection = 0;
+        } else {
+          mappedLinkedSections.push_back({sectionToMap.sectionName, notFixedSectionsTotalSize, sectionToMap.locationCounter});
+          sectionToMap.addressInLinkedSection = 0;
+          notFixedSectionsTotalSize += sectionToMap.locationCounter;
+        }
+      }
+    }
+  }
+
+  vector<mappingStruct> sortedSections = mappedLinkedSections;
+  sort(sortedSections.begin(), sortedSections.end(), [](const mappingStruct &a, const mappingStruct &b) {
+    return a.startAddress < b.startAddress;
+  });
+
+  for(size_t i = 0; i < sortedSections.size() - 1; i++) {
+    int endAddress = sortedSections[i].startAddress + sortedSections[i].size;
+
+    if(endAddress > sortedSections[i + 1].startAddress) {
+      cout << "OVERLAP FOUND BETWEEN SECTIONS " << sortedSections[i].sectionName 
+           << " AND " << sortedSections[i + 1].sectionName << endl;
+      exit(0);
+    }
+  }
 }
 
 void Linker::symbolDetermination() {
+  set<string> symbolNames;
+  set<string> sectionNames;
+  int lastSectionIndex = 1;
+  newSymbolTable.push_back({(int) newSymbolTable.size(), 0, NOTYP, LOC, 0, string()});
+  for(auto &file : inputFilesSections) {
+    for(auto &symbol : file.symbolTable) {
+      if(symbol.num == 0) continue;
+      if(symbolNames.find(symbol.name) == symbolNames.end() && sectionNames.find(symbol.name) == sectionNames.end()) {
+        if(symbol.type == NOTYP && symbol.bind == GLOB) {
+          symbolNames.insert(symbol.name);
 
+          string sectionName;
+          for(auto &sec : file.symbolTable) {
+            if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
+              sectionName = sec.name;
+              break;
+            }
+          }
+
+          int addValue = 0;
+          for(auto &sec : file.sections) {
+            if(sec.sectionName == sectionName) {
+              addValue = sec.addressInLinkedSection;
+              break;
+            }
+          }
+
+          newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, 0, symbol.name, 0, sectionName});
+        } else if(symbol.type == SCTN){
+          sectionNames.insert(symbol.name);
+
+          int addValue = 0;
+          for(auto &sec : file.sections) {
+            if(sec.sectionName == symbol.name) {
+              addValue = sec.addressInLinkedSection;
+            }
+          }
+
+          newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, lastSectionIndex++, symbol.name, 0, symbol.name});
+        }
+      } else {
+        for(auto &symbol2 : newSymbolTable) {
+          if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
+            symbol2.sectionIndex = symbol.sectionIndex;
+          } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
+            cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
+            exit(0);
+          }
+        }
+      }
+    }
+  }
+
+  for(auto &symbol : newSymbolTable) {
+    bool found = false;
+    if(symbol.type == NOTYP) {
+      for(auto &symbol2 : newSymbolTable) {
+        if(symbol2.type == SCTN && symbol.sectionName == symbol2.name) {
+          symbol.sectionIndex = symbol2.sectionIndex;
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if(!found && symbol.type == NOTYP && symbol.num != 0 && symbol.sectionIndex == 0) {
+      cout << "UNRESOLVED SYMBOL" << endl;
+      exit(0);
+    }
+  }
+  
+  if(hex) {
+    for(auto &symbol : newSymbolTable) {
+      for(auto &section : mappedLinkedSections) {
+        if(symbol.sectionName == section.sectionName) {
+          symbol.value += section.startAddress;
+        }
+      }
+    }
+  } else if(relocatable) {
+    relocatableNewSymbolTable = newSymbolTable;
+  }
 }
 
 void Linker::symbolResolution() {
+  for(auto &file : inputFilesSections) {
+    for(auto &section : file.sections) {
+      for(auto &relaRow : section.relaTable) {
+        int value = 0;
+        if(relaRow.type == MY_R_X86_64_32S) value = relaRow.addend;
+        else if(relaRow.type == MY_R_X86_64_PC32) value = relaRow.addend - relaRow.offset;
+
+        for(auto &symbol : file.symbolTable) {
+          if(symbol.num == relaRow.symbol) {
+            for(auto &symbol2 : newSymbolTable) {
+              if(symbol2.name == symbol.name) {
+                value += symbol2.value;
+                break;
+              }
+            }
+            break;
+          }
+        }
+
+        for(int i = 0; i < 4; i++) {
+          section.sectionData8bitValues[relaRow.offset + i] = (value >> (8 * i)) & 0xFF;
+        }
+      }
+    }
+  }
+}
+
+void Linker::makeRelocatableNewSections() {
+  for(auto &symbol : relocatableNewSymbolTable) {
+    if(symbol.type == SCTN) {
+      relocatableNewSections.push_back({symbol.num, symbol.name, vector<uint8_t>(), 0, vector<relaTableRow>(), symbol.sectionIndex, 0, 0});
+    }
+  }
+
+  for(auto &file : inputFilesSections) {
+    for(auto &section : file.sections) {
+      for(auto &section2 : relocatableNewSections) {
+        if(section.sectionName == section2.sectionName) {
+          section2.sectionData8bitValues.insert(section2.sectionData8bitValues.end(), section.sectionData8bitValues.begin(), section.sectionData8bitValues.end());
+          
+          for(auto &relaRow : section.relaTable) {
+            int newSymbolNum = relaRow.symbol;
+            string newSymbolName;
+            symbolType newSymbolType;
+
+            for(auto &symbol : file.symbolTable) {
+              if(symbol.num == newSymbolNum) {
+                newSymbolName = symbol.name;
+                newSymbolType = symbol.type;
+                break;
+              }
+            }
+
+            for(auto &symbol : newSymbolTable) {
+              if(newSymbolName == symbol.name) {
+                newSymbolNum = symbol.num;
+                break;
+              }
+            }
+
+            int addend = relaRow.addend;
+            if(newSymbolType == SCTN) addend += section.addressInLinkedSection;
+
+            section2.relaTable.push_back({relaRow.offset + section.addressInLinkedSection, relaRow.type, newSymbolNum, addend});
+          }
+          break;
+        }
+      }
+    }
+  }
 
 }
 
+void Linker::hexWrite() {
+  ofstream hexFile(outputFile);
+  if (!hexFile.is_open()) {
+    cerr << "Error opening file!" << endl;
+    return;
+  }
 
-void Linker::printSymbolTable(const vector<symbolTableRow>& symbolTable) {
+  for(auto &file : inputFilesSections) {
+    for(auto &section : file.sections) {
+      int position = section.addressInLinkedSection;
+
+      for(auto &section2 : mappedLinkedSections) {
+        if(section2.sectionName == section.sectionName) {
+          position += section2.startAddress;
+          break;
+        }
+      }
+
+      hexFile.seekp(position);
+      for(uint8_t data : section.sectionData8bitValues) {
+        hexFile.write(reinterpret_cast<const char*>(&data), sizeof(data));
+      }
+    }
+  }
+
+  hexFile.close();
+}
+
+void Linker::elfWrite() {
+  ofstream ofs(outputFile, ios::binary);
+  if(!ofs) {
+    cerr << "Failed to open file for writing." << endl;
+    return;
+  }
+
+  // ELF Header
+  Elf64_Ehdr ehdr;
+  std::memset(&ehdr, 0, sizeof(ehdr));
+  ehdr.e_ident[EI_MAG0] = ELFMAG0;
+  ehdr.e_ident[EI_MAG1] = ELFMAG1;
+  ehdr.e_ident[EI_MAG2] = ELFMAG2;
+  ehdr.e_ident[EI_MAG3] = ELFMAG3;
+  ehdr.e_ident[EI_CLASS] = ELFCLASS64;
+  ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
+  ehdr.e_ident[EI_VERSION] = EV_CURRENT;
+  ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
+  ehdr.e_type = ET_REL;
+  ehdr.e_machine = EM_X86_64;
+  ehdr.e_version = EV_CURRENT;
+  ehdr.e_phoff = 0;
+  ehdr.e_shoff = sizeof(Elf64_Ehdr);
+  ehdr.e_flags = 0;
+  ehdr.e_ehsize = sizeof(Elf64_Ehdr);
+  ehdr.e_phentsize = 0;
+  ehdr.e_phnum = 0;
+  ehdr.e_shentsize = sizeof(Elf64_Shdr);
+  ehdr.e_shnum = relocatableNewSections.size() * 2 + 4;
+  ehdr.e_shstrndx = 1;
+  
+  ofs.write(reinterpret_cast<char*>(&ehdr), sizeof(ehdr));
+
+  // Section Headers
+  vector<Elf64_Shdr> shdrs(ehdr.e_shnum);
+
+  // Null section
+  memset(&shdrs[0], 0, sizeof(Elf64_Shdr));
+
+  // Section names (shstrtab)
+  string shstrtab;
+  shstrtab.append("\0", 1);
+  vector<size_t> section_name_offsets;
+  vector<size_t> rela_name_offsets;
+
+  for(const auto& section : relocatableNewSections) {
+    section_name_offsets.push_back(shstrtab.size());
+    shstrtab.append(section.sectionName.c_str(), section.sectionName.size() + 1);
+
+    rela_name_offsets.push_back(shstrtab.size());
+    shstrtab.append((".rela" + section.sectionName + "\0").c_str(), section.sectionName.size() + 6);
+  }
+
+  size_t shstrtab_offset = shstrtab.size();
+  shstrtab.append(".shstrtab\0", 10);
+  size_t symtab_offset = shstrtab.size();
+  shstrtab.append(".symtab\0", 8);
+  size_t strtab_offset = shstrtab.size();
+  shstrtab.append(".strtab\0", 8);
+
+  // shstrtab section header
+  shdrs[1].sh_name = shstrtab_offset;
+  shdrs[1].sh_type = SHT_STRTAB;
+  shdrs[1].sh_offset = sizeof(Elf64_Ehdr) + shdrs.size() * sizeof(Elf64_Shdr);
+  shdrs[1].sh_size = shstrtab.size();
+  size_t offset = shdrs[1].sh_offset + shdrs[1].sh_size;
+
+  // Section data header
+  for(size_t i = 0; i < relocatableNewSections.size(); i++) {
+    shdrs[i + 2].sh_name = section_name_offsets[i];
+    shdrs[i + 2].sh_type = SHT_PROGBITS;
+    shdrs[i + 2].sh_offset = offset;
+    shdrs[i + 2].sh_size = relocatableNewSections[i].sectionData8bitValues.size();
+    offset += shdrs[i + 2].sh_size;
+  }
+
+  // Relocation table headers
+  for(size_t i = 0; i < relocatableNewSections.size(); ++i) {
+    shdrs[relocatableNewSections.size() + i + 2].sh_name = rela_name_offsets[i];
+    shdrs[relocatableNewSections.size() + i + 2].sh_type = SHT_RELA;
+    shdrs[relocatableNewSections.size() + i + 2].sh_offset = offset;
+    shdrs[relocatableNewSections.size() + i + 2].sh_size = relocatableNewSections[i].relaTable.size() * sizeof(Elf64_Rela);
+    shdrs[relocatableNewSections.size() + i + 2].sh_link = relocatableNewSections.size() * 2 + 2; // Link to .symtab
+    shdrs[relocatableNewSections.size() + i + 2].sh_info = i + 2; // Index of the associated section
+    shdrs[relocatableNewSections.size() + i + 2].sh_addralign = 8;
+    shdrs[relocatableNewSections.size() + i + 2].sh_entsize = sizeof(Elf64_Rela);
+    offset += shdrs[relocatableNewSections.size() + i + 2].sh_size;
+  }
+
+  // Symtab header
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_name = symtab_offset;
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_type = SHT_SYMTAB;
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_offset = offset;
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_size = relocatableNewSymbolTable.size() * sizeof(Elf64_Sym);
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_link = relocatableNewSections.size() * 2 + 3; // Link to .strtab
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_info = relocatableNewSymbolTable.size();
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_addralign = 8;
+  shdrs[relocatableNewSections.size() * 2 + 2].sh_entsize = sizeof(Elf64_Sym);
+  offset += shdrs[relocatableNewSections.size() * 2 + 2].sh_size;
+
+  // Strtab header
+  shdrs[relocatableNewSections.size() * 2 + 3].sh_name = strtab_offset;
+  shdrs[relocatableNewSections.size() * 2 + 3].sh_type = SHT_STRTAB;
+  shdrs[relocatableNewSections.size() * 2 + 3].sh_offset = offset;
+  shdrs[relocatableNewSections.size() * 2 + 3].sh_size = 1; // initially only null byte
+  for(const auto& sym : relocatableNewSymbolTable) {
+    shdrs[relocatableNewSections.size() * 2 + 3].sh_size += sym.name.size() + 1;
+  }
+
+  ofs.write(reinterpret_cast<char*>(shdrs.data()), shdrs.size() * sizeof(Elf64_Shdr));
+
+  // Write shstrtab
+  ofs.write(shstrtab.c_str(), shstrtab.size());
+
+  // Write section data
+  for(const auto& section : relocatableNewSections) {
+    ofs.write(reinterpret_cast<const char*>(section.sectionData8bitValues.data()), section.sectionData8bitValues.size());
+  }
+
+  // Write relocation tables
+  for(const auto& section : relocatableNewSections) {
+    for(const auto& rela : section.relaTable) {
+      Elf64_Rela elf_rela;
+      elf_rela.r_offset = rela.offset;
+      elf_rela.r_info = ELF64_R_INFO(rela.symbol, (rela.type == MY_R_X86_64_32S) ? R_X86_64_32S : R_X86_64_PC32);
+      elf_rela.r_addend = rela.addend;
+      ofs.write(reinterpret_cast<const char*>(&elf_rela), sizeof(elf_rela));
+    }
+  }
+
+  // Write symtab
+  string strtab;
+  strtab.append("\0", 1); // NULL byte
+  for(const auto& sym : relocatableNewSymbolTable) {
+    Elf64_Sym symbol;
+    memset(&symbol, 0, sizeof(symbol));
+    symbol.st_name = strtab.size(); // Offset in strtab
+    symbol.st_info = ELF64_ST_INFO((sym.bind == GLOB) ? STB_GLOBAL : STB_LOCAL, (sym.type == SCTN) ? STT_SECTION : STT_NOTYPE);
+    symbol.st_other = 0;
+    symbol.st_shndx = sym.sectionIndex;
+    symbol.st_value = sym.value;
+    symbol.st_size = 0; // Size is usually set by the linker
+    ofs.write(reinterpret_cast<char*>(&symbol), sizeof(symbol));
+    strtab.append(sym.name.c_str(), sym.name.size() + 1);
+  }
+
+  // Write strtab
+  ofs.write(strtab.c_str(), strtab.size());
+
+  ofs.close();
+}
+
+
+void Linker::printSymbolTable(const vector<symbolTableRow> &symbolTable) {
   cout << left
     << setw(10) << "Num"
     << setw(10) << "Value"
@@ -220,7 +604,7 @@ void Linker::printSymbolTable(const vector<symbolTableRow>& symbolTable) {
   cout << endl;
 }
 
-void Linker::printRelaTables(const sectionStruct& section) {
+void Linker::printRelaTables(const sectionStruct &section) {
   cout << "Relocation Table:" << endl;
 
   cout << left
@@ -242,7 +626,7 @@ void Linker::printRelaTables(const sectionStruct& section) {
   }
 }
 
-void Linker::printSections(const vector<sectionStruct>& sections) {
+void Linker::printSections(const vector<sectionStruct> &sections) {
   for(const auto& section : sections) {
     cout << "Section Number: " << section.sectionNum << endl;
     cout << "Section Name: " << section.sectionName << endl;

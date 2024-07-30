@@ -1,13 +1,13 @@
-.global sym3, sym4
-.extern sym5, sym8, sym9
+.global sym5, sym8, sym9, sym4
+.extern sym3
 
 .section code
 # .equ sym6, -sym1 + 0xFFFFFEFE
 # .equ sym7, sym2 + 10000 + sym6
     ld $sym3, %sp
-sym1:
-    .word sym1, 12345, sym2, 0x12345, 54321, sym4, sym2
-sym3:
+sym5:
+    .word sym5, 12345, sym2, 0x12345, 54321, sym4, sym2
+sym8:
     ld $1000, %r1
     beq %r4, %r10, 0x2000 # this is comment
 sym2:
@@ -15,9 +15,9 @@ sym2:
     xor %r2, %pc
     bgt %r15, %sp, 1000
 sym4:
-    jmp sym1
+    jmp sym5
     push %r1
-sym10:
+sym9:
     ld [%sp], %r12
     pop %r1
     xchg %r13, %r2
@@ -25,7 +25,7 @@ sym10:
 .section code2
     bne %r11, %r2, sym3
     csrwr %r2, %status
-sym11:
+sym16:
     .skip 10
     csrrd %cause, %r1
     csrrd %handler, %r3

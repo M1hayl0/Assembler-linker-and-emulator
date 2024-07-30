@@ -21,7 +21,9 @@ private:
     int sectionIndex;
     string name;
 
-    int nameElf;
+    int nameElf = 0;
+
+    string sectionName;
   };
   
   enum relaType { 
@@ -45,6 +47,8 @@ private:
     int symtabIndex;
 
     int secIndexElf;
+
+    int addressInLinkedSection;
   };
 
   struct inputFileStruct {
@@ -54,6 +58,22 @@ private:
   };
 
   vector<inputFileStruct> inputFilesSections;
+
+
+  struct mappingStruct {
+    string sectionName;
+    int startAddress;
+    int size;
+  };
+
+  vector<mappingStruct> mappedLinkedSections;
+  int notFixedSectionsTotalSize = 0;
+
+
+  vector<symbolTableRow> newSymbolTable;
+
+  vector<symbolTableRow> relocatableNewSymbolTable;
+  vector<sectionStruct> relocatableNewSections;
 
 
   string outputFile;
@@ -70,6 +90,9 @@ public:
   void mapping();
   void symbolDetermination();
   void symbolResolution();
+  void makeRelocatableNewSections();
+  void hexWrite();
+  void elfWrite();
 
   void printSymbolTable(const vector<symbolTableRow>&);
   void printRelaTables(const sectionStruct&);
