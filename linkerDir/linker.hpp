@@ -1,10 +1,9 @@
 #ifndef LINKER_H
 #define LINKER_H
 
-#include <cstring>
 #include <map>
+#include <string>
 #include <vector>
-#include <iomanip>
 
 using namespace std;
 
@@ -67,6 +66,7 @@ private:
   };
 
   vector<mappingStruct> mappedLinkedSections;
+  int notFixedSectionsStartAddress = 0;
   int notFixedSectionsTotalSize = 0;
 
 
@@ -78,8 +78,8 @@ private:
 
   string outputFile;
   map<string, int> place;
-  bool hex;
-  bool relocatable;
+  bool hexBool;
+  bool relocatableBool;
   vector<string> inputFiles;
 
 public:

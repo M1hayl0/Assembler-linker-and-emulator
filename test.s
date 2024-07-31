@@ -17,7 +17,7 @@ sym2:
 sym4:
     jmp sym5
     push %r1
-sym9:
+sym16:
     ld [%sp], %r12
     pop %r1
     xchg %r13, %r2
@@ -25,7 +25,7 @@ sym9:
 .section code2
     bne %r11, %r2, sym3
     csrwr %r2, %status
-sym16:
+sym9:
     .skip 10
     csrrd %cause, %r1
     csrrd %handler, %r3

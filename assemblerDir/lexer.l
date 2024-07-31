@@ -5,7 +5,7 @@
   #include "argumentTrasfer.h"
 %}
 
-%option outfile="lexer.c" header-file="lexer.h"
+%option outfile="assemblerDir/lexer.c" header-file="assemblerDir/lexer.h"
 
 %option noyywrap
 

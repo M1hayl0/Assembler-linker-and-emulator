@@ -3,8 +3,6 @@
 
 #include <string>
 #include <vector>
-#include <iostream>
-#include <iomanip>
 
 using namespace std;
 
@@ -12,9 +10,17 @@ class Assembler {
 private:
   enum symbolType { NOTYP, SCTN };
   enum symbolBind { LOC, GLOB };
+  
+  enum relaType { 
+    MY_R_X86_64_32S, //symbol value + addend
+    MY_R_X86_64_PC32  //symbol value + addend - offset
+  };
 
   struct forwardRefsList {
-    int patch;
+    int offset;
+    relaType type;
+    int addend;
+
     int sectionToPatchNum;
     forwardRefsList *next;
   };
@@ -29,11 +35,6 @@ private:
 
     bool defined;
     forwardRefsList *head;
-  };
-  
-  enum relaType { 
-    MY_R_X86_64_32S, //symbol value + addend
-    MY_R_X86_64_PC32  //symbol value + addend - offset
   };
 
   struct relaTableRow {

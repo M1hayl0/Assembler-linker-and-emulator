@@ -1,21 +1,21 @@
 test: assemblerAll linkerAll
-	./assembler -o output.o test.s
-	./assembler -o output2.o test2.s
-	./linker -hex -place=code@0x0100 -place=code2@0x0200 -o mem_content.hex output.o output2.o
-	./linker -relocatable -place=code@0x0100 -place=code2@0x0200 -o outputLinker.o output.o output2.o
-	readelf -a outputLinker.o
+	./assemblerDir/assembler -o ./assemblerDir/output.o test.s
+	./assemblerDir/assembler -o ./assemblerDir/output2.o test2.s
+	./linkerDir/linker -hex -place=code2@0x0100 -o ./linkerDir/mem_content.hex ./assemblerDir/output.o ./assemblerDir/output2.o
+	./linkerDir/linker -relocatable -place=code2@0x0100 -place=code@0x0200 -o ./linkerDir/outputLinker.o ./assemblerDir/output.o ./assemblerDir/output2.o
+	readelf -a ./linkerDir/outputLinker.o
 
-assemblerAll: mainAssembler.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp argumentTrasfer.h assembler.hpp
-	g++ mainAssembler.cpp argumentTrasfer.c parser.c lexer.c assembler.cpp -o assembler
+assemblerAll: assemblerDir/mainAssembler.cpp assemblerDir/argumentTrasfer.c assemblerDir/parser.c assemblerDir/lexer.c assemblerDir/assembler.cpp assemblerDir/argumentTrasfer.h assemblerDir/assembler.hpp
+	g++ assemblerDir/mainAssembler.cpp assemblerDir/argumentTrasfer.c assemblerDir/parser.c assemblerDir/lexer.c assemblerDir/assembler.cpp -o assemblerDir/assembler
 
-lexer.c: lexer.l argumentTrasfer.h
-	flex lexer.l
+assemblerDir/lexer.c: assemblerDir/lexer.l assemblerDir/argumentTrasfer.h
+	flex -o assemblerDir/lexer.c assemblerDir/lexer.l
 
-parser.c: parser.y lexer.l argumentTrasfer.h
-	bison parser.y
+assemblerDir/parser.c: assemblerDir/parser.y assemblerDir/lexer.l assemblerDir/argumentTrasfer.h
+	bison -o assemblerDir/parser.c assemblerDir/parser.y
 
-linkerAll: mainLinker.cpp linker.cpp linker.hpp
-	g++ mainLinker.cpp linker.cpp -o linker
+linkerAll: linkerDir/mainLinker.cpp linkerDir/linker.cpp linkerDir/linker.hpp
+	g++ linkerDir/mainLinker.cpp linkerDir/linker.cpp -o linkerDir/linker
 
 clean:
-	rm -rf *.o lexer.c lexer.h parser.c parser.h *.hex assembler linker
+	rm -rf assemblerDir/*.o linkerDir/*.o assemblerDir/lexer.c assemblerDir/lexer.h assemblerDir/parser.c assemblerDir/parser.h linkerDir/*.hex assemblerDir/assembler linkerDir/linker

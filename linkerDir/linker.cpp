@@ -4,31 +4,31 @@
 #include <iostream>
 #include <cstring>
 #include <elf.h>
-#include <map>
-#include <vector>
 #include <algorithm>
 #include <set>
+#include <iomanip>
 
+using namespace std;
 
-Linker::Linker(string outputFile, map<string, int> place, bool hex, bool relocatable, vector<string> inputFiles) {
+Linker::Linker(string outputFile, map<string, int> place, bool hexBool, bool relocatableBool, vector<string> inputFiles) {
   this->outputFile = outputFile;
   this->place = place;
-  this->hex = hex;
-  this->relocatable = relocatable;
+  this->hexBool = hexBool;
+  this->relocatableBool = relocatableBool;
   this->inputFiles = inputFiles;
 }
 
 void Linker::link() {
   for(auto file : inputFiles) elfRead(file);
-  printInputFilesSections();
+  // printInputFilesSections();
 
   mapping();
   symbolDetermination();
-  if(hex) symbolResolution();
-  else if(relocatable) makeRelocatableNewSections();
+  if(hexBool) symbolResolution();
+  else if(relocatableBool) makeRelocatableNewSections();
 
-  if(hex) hexWrite();
-  else if(relocatable) elfWrite();
+  if(hexBool) hexWrite();
+  else if(relocatableBool) elfWrite();
 }
 
 void Linker::elfRead(string inputFileName) {
@@ -187,6 +187,24 @@ void Linker::elfRead(string inputFileName) {
 }
 
 void Linker::mapping() {
+  string sectionWithHighestStartAddress;
+  int highestStartAddress = 0;
+  for(const auto& section : place) {
+    if(section.second > highestStartAddress) {
+      sectionWithHighestStartAddress = section.first;
+      highestStartAddress = section.second;
+    }
+  }
+
+  notFixedSectionsStartAddress = highestStartAddress;
+  for(auto &file : inputFilesSections) {
+    for(auto &section : file.sections) {
+      if(section.sectionName == sectionWithHighestStartAddress) {
+        notFixedSectionsStartAddress += section.locationCounter;
+      }
+    }
+  }
+
   for(auto &file : inputFilesSections) {
     for(auto &sectionToMap : file.sections) {
       bool found = false;
@@ -205,7 +223,9 @@ void Linker::mapping() {
             notFixedSectionsTotalSize += sectionToMap.locationCounter;
             found = true;
           } else if(found) {
-            currentSection.startAddress += sectionToMap.locationCounter;
+            if(place.find(currentSection.sectionName) == place.end()) {
+              currentSection.startAddress += sectionToMap.locationCounter;
+            }
           }
         }
       }
@@ -215,7 +235,7 @@ void Linker::mapping() {
           mappedLinkedSections.push_back({sectionToMap.sectionName, place[sectionToMap.sectionName], sectionToMap.locationCounter});
           sectionToMap.addressInLinkedSection = 0;
         } else {
-          mappedLinkedSections.push_back({sectionToMap.sectionName, notFixedSectionsTotalSize, sectionToMap.locationCounter});
+          mappedLinkedSections.push_back({sectionToMap.sectionName, notFixedSectionsStartAddress + notFixedSectionsTotalSize, sectionToMap.locationCounter});
           sectionToMap.addressInLinkedSection = 0;
           notFixedSectionsTotalSize += sectionToMap.locationCounter;
         }
@@ -232,7 +252,7 @@ void Linker::mapping() {
     int endAddress = sortedSections[i].startAddress + sortedSections[i].size;
 
     if(endAddress > sortedSections[i + 1].startAddress) {
-      cout << "OVERLAP FOUND BETWEEN SECTIONS " << sortedSections[i].sectionName 
+      cout << "OVERLAP FOUND BETWEEN SECTIONS " << sortedSections[i].sectionName
            << " AND " << sortedSections[i + 1].sectionName << endl;
       exit(0);
     }
@@ -283,7 +303,24 @@ void Linker::symbolDetermination() {
       } else {
         for(auto &symbol2 : newSymbolTable) {
           if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
+            string sectionName;
+            for(auto &sec : file.symbolTable) {
+              if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
+                sectionName = sec.name;
+                break;
+              }
+            }
+
+            int addValue = 0;
+            for(auto &sec : file.sections) {
+              if(sec.sectionName == sectionName) {
+                addValue = sec.addressInLinkedSection;
+                break;
+              }
+            }
+            
             symbol2.sectionIndex = symbol.sectionIndex;
+            symbol2.value = symbol.value + addValue;
           } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
             cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
             exit(0);
@@ -311,7 +348,7 @@ void Linker::symbolDetermination() {
     }
   }
   
-  if(hex) {
+  if(hexBool) {
     for(auto &symbol : newSymbolTable) {
       for(auto &section : mappedLinkedSections) {
         if(symbol.sectionName == section.sectionName) {
@@ -319,7 +356,7 @@ void Linker::symbolDetermination() {
         }
       }
     }
-  } else if(relocatable) {
+  } else if(relocatableBool) {
     relocatableNewSymbolTable = newSymbolTable;
   }
 }
@@ -405,6 +442,15 @@ void Linker::hexWrite() {
     return;
   }
 
+  struct hexStruct {
+    string sectionName;
+    int position;
+    vector<uint8_t> sectionData8bitValues;
+  };
+
+  vector<hexStruct> memory;
+  set<string> sectionNames;
+
   for(auto &file : inputFilesSections) {
     for(auto &section : file.sections) {
       int position = section.addressInLinkedSection;
@@ -416,11 +462,40 @@ void Linker::hexWrite() {
         }
       }
 
-      hexFile.seekp(position);
-      for(uint8_t data : section.sectionData8bitValues) {
-        hexFile.write(reinterpret_cast<const char*>(&data), sizeof(data));
+      if(sectionNames.find(section.sectionName) == sectionNames.end()) {
+        sectionNames.insert(section.sectionName);
+        memory.push_back({section.sectionName, position, section.sectionData8bitValues});
+      } else {
+        for(auto &section2 : memory) {
+          if(section.sectionName == section2.sectionName) {
+            if(section2.position + section2.sectionData8bitValues.size() == position) {
+              section2.sectionData8bitValues.insert(section2.sectionData8bitValues.end(), section.sectionData8bitValues.begin(), section.sectionData8bitValues.end());
+              break;
+            } else {
+              cout << "ERROR" << endl;
+              exit(0);
+            }
+          }
+        }
       }
     }
+  }
+
+  sort(memory.begin(), memory.end(), 
+    [](const hexStruct& a, 
+      const hexStruct& b) {
+        return a.position < b.position;
+      });
+
+  for (const auto& mem : memory) {
+    int i = 0;
+    for(uint8_t data : mem.sectionData8bitValues) {
+      if(!(i % 8) && i != 0) hexFile << endl;
+      if(!(i % 8)) hexFile << hex << setw(8) << setfill('0') << mem.position + i << ": ";
+      hexFile << hex << setw(2) << setfill('0') << (int) data << " ";
+      i++;
+    }
+    hexFile << endl << endl;
   }
 
   hexFile.close();

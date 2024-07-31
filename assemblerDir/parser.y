@@ -6,8 +6,8 @@
   int yylex(void);
 %}
 
-%output "parser.c"
-%defines "parser.h"
+%output "assemblerDir/parser.c"
+%defines "assemblerDir/parser.h"
 
 %union {
   int numLit;

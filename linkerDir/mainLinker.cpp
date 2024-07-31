@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <iostream>
-#include <string.h>
 #include <map>
 #include <vector>
+#include <cstring>
 
 #include "linker.hpp"
 
@@ -56,9 +56,14 @@ int main(int argc, char* argv[]) {
   bool hex = false;
   bool relocatable = false;
   vector<string> inputFiles;
+
+  if(string(argv[0]) != "./linkerDir/linker") {
+    cout << "Call program like this: ./linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
+    return 1;
+  }
   
   if(!parseArgs(argc, argv, outputFile, place, hex, relocatable, inputFiles)) {
-    cout << "Call program like this " << endl;
+    cout << "Call program like this: ./linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
     return 1;
   }
 
