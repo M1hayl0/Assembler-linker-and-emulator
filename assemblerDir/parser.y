@@ -45,6 +45,7 @@
 %type <operandArgs> symbols;
 %type <operandArgs> symlits;
 %type <operandArgs> expression;
+%type <string> symWithRegNames;
 %type <string> string;
 
 %%
@@ -167,27 +168,31 @@ csrwr: CSRWR
 
 operand:
 VALUE LIT[numLit] { $$ = makeOperand(valueLitType, -1, NULL, $numLit); }
-| VALUE SYM[strSym] { $$ = makeOperand(valueSymType, -1, $strSym, -1); }
+| VALUE symWithRegNames { $$ = makeOperand(valueSymType, -1, $symWithRegNames, -1); }
 | LIT[numLit] { $$ = makeOperand(litType, -1, NULL, $numLit); }
-| SYM[strSym] { $$ = makeOperand(symType, -1, $strSym, -1); }
+| symWithRegNames { $$ = makeOperand(symType, -1, $symWithRegNames, -1); }
 | REG_START REGGPR[strReg] { $$ = makeOperand(regType, getRegNum($strReg), NULL, -1); }
 | MEM_START REG_START REGGPR[strReg] MEM_END { $$ = makeOperand(regMemType, getRegNum($strReg), NULL, -1); }
 | MEM_START REG_START REGGPR[strReg] PLUS LIT[numLit] MEM_END { $$ = makeOperand(regMemLitType, getRegNum($strReg), NULL, $numLit); }
-| MEM_START REG_START REGGPR[strReg] PLUS SYM[strSym] MEM_END { $$ = makeOperand(regMemSymType, getRegNum($strReg), $strSym, -1); }
+| MEM_START REG_START REGGPR[strReg] PLUS symWithRegNames MEM_END { $$ = makeOperand(regMemSymType, getRegNum($strReg), $symWithRegNames, -1); }
 ;
 
 operandJump:
 LIT[numLit] { $$ = makeOperand(litJumpType, -1, NULL, $numLit); }
-| SYM[strSym] { $$ = makeOperand(symJumpType, -1, $strSym, -1); }
+| symWithRegNames { $$ = makeOperand(symJumpType, -1, $symWithRegNames, -1); }
 
 regGpr: REG_START REGGPR[strReg] { $$ = makeOperand(regType, getRegNum($strReg), NULL, -1); }
 regCsr: REG_START REGCSR[strReg] { $$ = makeOperand(regType, getRegNum($strReg), NULL, -1); }
 lit: LIT[numLit] { $$ = makeOperand(litType, -1, NULL, $numLit); }
-sym: SYM[strSym] { $$ = makeOperand(symType, -1, $strSym, -1); }
+sym: symWithRegNames { $$ = makeOperand(symType, -1, $symWithRegNames, -1); }
 
 
-label: SYM[strSym] COLON { $$ = makeLabel(makeOperand(symType, -1, $strSym, -1)); }
+label: symWithRegNames COLON { $$ = makeLabel(makeOperand(symType, -1, $symWithRegNames, -1)); }
 
+
+symWithRegNames: SYM[strSym] { $$ = $strSym; }
+| REGGPR[strReg] { $$ = $strReg; }
+| REGCSR[strReg] { $$ = $strReg; }
 
 comma: COMMA
 eol: EOL

@@ -9,6 +9,13 @@ using namespace std;
 
 class Linker {
 private:
+  string outputFile;
+  map<string, uint> place;
+  bool hexBool;
+  bool relocatableBool;
+  vector<string> inputFiles;
+
+
   enum symbolType { NOTYP, SCTN };
   enum symbolBind { LOC, GLOB };
 
@@ -27,7 +34,6 @@ private:
   
   enum relaType { 
     MY_R_X86_64_32S, //symbol value + addend
-    MY_R_X86_64_PC32  //symbol value + addend - offset
   };
 
   struct relaTableRow {
@@ -61,29 +67,22 @@ private:
 
   struct mappingStruct {
     string sectionName;
-    int startAddress;
-    int size;
+    uint startAddress;
+    uint size;
   };
 
   vector<mappingStruct> mappedLinkedSections;
-  int notFixedSectionsStartAddress = 0;
-  int notFixedSectionsTotalSize = 0;
+  uint notFixedSectionsStartAddress = 0;
+  uint notFixedSectionsTotalSize = 0;
 
 
   vector<symbolTableRow> newSymbolTable;
 
   vector<symbolTableRow> relocatableNewSymbolTable;
   vector<sectionStruct> relocatableNewSections;
-
-
-  string outputFile;
-  map<string, int> place;
-  bool hexBool;
-  bool relocatableBool;
-  vector<string> inputFiles;
-
+  
 public:
-  Linker(string, map<string, int>, bool, bool, vector<string>);
+  Linker(string, map<string, uint>, bool, bool, vector<string>);
   void link();
 
   void elfRead(string);

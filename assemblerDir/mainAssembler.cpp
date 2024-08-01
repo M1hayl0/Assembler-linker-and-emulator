@@ -9,8 +9,8 @@
 
 
 int main(int argc, char* argv[]) {
-  if(argc < 4 || string(argv[0]) != "./assemblerDir/assembler" || string(argv[1]) != "-o") {
-    cout << "Call program like this: ./assemblerDir/assembler -o <output_file> <input_file>\n" << endl;
+  if(argc < 4 || string(argv[0]) != "./../../assemblerDir/assembler" || string(argv[1]) != "-o") {
+    cout << "Call program like this: ./../../assemblerDir/assembler -o <output_file> <input_file>\n" << endl;
     return 1;
   }
 

@@ -98,7 +98,7 @@ void Assembler::assemble() {
       for(forwardRefsList *cur = row.head; cur; cur = cur->next) {
         int symbol = row.num;
         sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
-        sectionToPatch.relaTable.push_back({cur->offset, cur->type, symbol, cur->addend});
+        sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, 0});
       }
     } else if(row.num != 0 && row.sectionIndex == 0 && row.bind == LOC) {
       cout << "UNRESOLVED SYMBOL" << endl;
@@ -163,12 +163,12 @@ void Assembler::wordAssemble(struct directive *directive) {
   for(operandArgs *operand = directive->operands; operand; operand = operand->next) {
     if(operand->type == symType) {
       bool found = false;
-      int addend = 0;
       for(auto &row : symbolTable) {
         if(row.name == string(operand->symbol) && row.defined) {
           found = true;
 
           int symbol = 0;
+          int addend = 0;
           if(row.bind == LOC) {
             symbol = sections[row.sectionIndex - 1].sectionNum;
             addend += row.value;
@@ -181,7 +181,7 @@ void Assembler::wordAssemble(struct directive *directive) {
           break;
         } else if(row.name == string(operand->symbol) && !row.defined) {
           found = true;
-          forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, row.head};
+          forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter, currentSection.symtabIndex - 1, row.head};
           row.head = refsList;
           push32BitValue(0, currentSection);
           break;
@@ -189,7 +189,7 @@ void Assembler::wordAssemble(struct directive *directive) {
       }
       
       if(!found) {
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, nullptr};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter, currentSection.symtabIndex - 1, nullptr};
         symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(operand->symbol), false, refsList});
         push32BitValue(0, currentSection);
       }
@@ -230,10 +230,20 @@ void Assembler::intAssemble(struct instruction *instruction) {
 
 void Assembler::iretAssemble(struct instruction *instruction) {
   sectionStruct &currentSection = sections.back();
-  // iret-> pop pc, pop status -> pc <= mem32[sp]; sp <= sp + 4; status <= mem32[sp]; sp <= sp + 4;
-  int instructionCode = makeInstructionCode(9, 3, 15, 14, 0, 0, 0, 4);
+  // iret-> pop pc, pop status -> sp <= sp + 8; status <= mem32[sp - 4]; pc <= mem32[sp - 8];
+  int instructionCode = makeInstructionCode(9, 1, 14, 14, 0, 0, 0, 8);
   push32BitValue(instructionCode, currentSection);
-  instructionCode = makeInstructionCode(9, 7, 0, 14, 0, 0, 0, 4);
+
+  int d1 = (-4 >> 8) & 0xF;
+  int d2 = (-4 >> 4) & 0xF;
+  int d3 = -4 & 0xF;
+  instructionCode = makeInstructionCode(9, 6, 0, 14, 0, d1, d2, d3);
+  push32BitValue(instructionCode, currentSection);
+
+  d1 = (-8 >> 8) & 0xF;
+  d2 = (-8 >> 4) & 0xF;
+  d3 = -8 & 0xF;
+  instructionCode = makeInstructionCode(9, 2, 15, 14, 0, d1, d2, d3);
   push32BitValue(instructionCode, currentSection);
 }
 
@@ -243,19 +253,19 @@ void Assembler::callAssemble(struct instruction *instruction) {
   if(instruction->operand1->type == symJumpType) {
     // call sym -> push pc; pc<=sym; -> pc<=[pc+4] (pc=r15)
     bool found = false;
-    int addend = 4; // 4 because offset is 4 locations after pc
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand1->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value; 
         } else if(row.bind == GLOB) {
           symbol = row.num;
         }
-        currentSection.relaTable.push_back({currentSection.locationCounter + 8, MY_R_X86_64_PC32, symbol, addend});
+        currentSection.relaTable.push_back({currentSection.locationCounter + 8, MY_R_X86_64_32S, symbol, addend});
 
         int instructionCode = makeInstructionCode(2, 1, 15, 0, 0, 0, 0, 4); // call [pc+4]
         push32BitValue(instructionCode, currentSection);
@@ -265,7 +275,7 @@ void Assembler::callAssemble(struct instruction *instruction) {
         break;
       } else if(row.name == string(instruction->operand1->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(2, 1, 15, 0, 0, 0, 0, 4); // call [pc+4]
         push32BitValue(instructionCode, currentSection);
@@ -277,7 +287,7 @@ void Assembler::callAssemble(struct instruction *instruction) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand1->symbol), false, refsList});
       int instructionCode = makeInstructionCode(2, 1, 15, 0, 0, 0, 0, 4); // call [pc+4]
       push32BitValue(instructionCode, currentSection);
@@ -308,19 +318,19 @@ void Assembler::jmpAssemble(struct instruction *instruction) {
   if(instruction->operand1->type == symJumpType) {
     // jmp sym -> pc<=sym -> pc<=[pc] (pc=r15)
     bool found = false;
-    int addend = 0; // 0 because pc is same as offset
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand1->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value;
         } else if(row.bind == GLOB) {
           symbol = row.num;
         }
-        currentSection.relaTable.push_back({currentSection.locationCounter + 4, MY_R_X86_64_PC32, symbol, addend});
+        currentSection.relaTable.push_back({currentSection.locationCounter + 4, MY_R_X86_64_32S, symbol, addend});
 
         int instructionCode = makeInstructionCode(3, 8, 15, 0, 0, 0, 0, 0); // jmp [pc]
         push32BitValue(instructionCode, currentSection);
@@ -328,7 +338,7 @@ void Assembler::jmpAssemble(struct instruction *instruction) {
         break;
       } else if(row.name == string(instruction->operand1->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 4, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 4, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(3, 8, 15, 0, 0, 0, 0, 0); // jmp [pc]
         push32BitValue(instructionCode, currentSection);
@@ -338,7 +348,7 @@ void Assembler::jmpAssemble(struct instruction *instruction) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 4, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 4, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand1->symbol), false, refsList});
       int instructionCode = makeInstructionCode(3, 8, 15, 0, 0, 0, 0, 0); // jmp [pc]
       push32BitValue(instructionCode, currentSection);
@@ -358,19 +368,19 @@ void Assembler::beqBneBgtAssemble(struct instruction *instruction, int MOD) {
   if(instruction->operand3->type == symJumpType) {
     // beq %gpr1, %gpr2, sym -> if(gpr1 == gpr2) pc <= sym -> pc<=[pc+4] (pc=r15)
     bool found = false;
-    int addend = 4; // 4 because offset is 4 locations after pc
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand3->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value; 
         } else if(row.bind == GLOB) {
           symbol = row.num;
         }
-        currentSection.relaTable.push_back({currentSection.locationCounter + 8, MY_R_X86_64_PC32, symbol, addend});
+        currentSection.relaTable.push_back({currentSection.locationCounter + 8, MY_R_X86_64_32S, symbol, addend});
 
         int instructionCode = makeInstructionCode(3, MOD, 15, instruction->operand1->regNum, instruction->operand2->regNum, 0, 0, 4); // beq [pc+4]
         push32BitValue(instructionCode, currentSection);
@@ -380,7 +390,7 @@ void Assembler::beqBneBgtAssemble(struct instruction *instruction, int MOD) {
         break;
       } else if(row.name == string(instruction->operand3->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(3, MOD, 15, instruction->operand1->regNum, instruction->operand2->regNum, 0, 0, 4); // beq [pc+4]
         push32BitValue(instructionCode, currentSection);
@@ -391,7 +401,7 @@ void Assembler::beqBneBgtAssemble(struct instruction *instruction, int MOD) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_PC32, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand3->symbol), false, refsList});
       int instructionCode = makeInstructionCode(3, MOD, 15, instruction->operand1->regNum, instruction->operand2->regNum, 0, 0, 4); // beq [pc+4]
       push32BitValue(instructionCode, currentSection);
@@ -455,12 +465,12 @@ void Assembler::ldAssemble(struct instruction *instruction) {
     push32BitValue(instruction->operand1->literal, currentSection); // 32bit literal
   } else if(instruction->operand1->type == valueSymType) {
     bool found = false;
-    int addend = 0;
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand1->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value;
@@ -477,7 +487,7 @@ void Assembler::ldAssemble(struct instruction *instruction) {
         break;
       } else if(row.name == string(instruction->operand1->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(9, 2, instruction->operand2->regNum, 15, 0, 0, 0, 4); // ld [pc+4], %gpr
         push32BitValue(instructionCode, currentSection);
@@ -489,7 +499,7 @@ void Assembler::ldAssemble(struct instruction *instruction) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand1->symbol), false, refsList});
       int instructionCode = makeInstructionCode(9, 2, instruction->operand2->regNum, 15, 0, 0, 0, 4); // ld [pc+4], %gpr
       push32BitValue(instructionCode, currentSection);
@@ -507,12 +517,12 @@ void Assembler::ldAssemble(struct instruction *instruction) {
     push32BitValue(instruction->operand1->literal, currentSection); // 32bit literal
   } else if(instruction->operand1->type == symType) {
     bool found = false;
-    int addend = 0;
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand1->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value;
@@ -531,7 +541,7 @@ void Assembler::ldAssemble(struct instruction *instruction) {
         break;
       } else if(row.name == string(instruction->operand1->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 12, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 12, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(9, 2, instruction->operand2->regNum, 15, 0, 0, 0, 8); // ld [pc+8], %gpr
         push32BitValue(instructionCode, currentSection);
@@ -545,7 +555,7 @@ void Assembler::ldAssemble(struct instruction *instruction) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 12, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 12, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand1->symbol), false, refsList});
       int instructionCode = makeInstructionCode(9, 2, instruction->operand2->regNum, 15, 0, 0, 0, 8); // ld [pc+8], %gpr
       push32BitValue(instructionCode, currentSection);
@@ -594,12 +604,12 @@ void Assembler::stAssemble(struct instruction *instruction) {
     push32BitValue(instruction->operand2->literal, currentSection); // 32bit literal
   } else if(instruction->operand2->type == symType) {
     bool found = false;
-    int addend = 0;
     for(auto &row : symbolTable) {
       if(row.name == string(instruction->operand2->symbol) && row.defined) {
         found = true;
 
         int symbol = 0;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value;
@@ -616,7 +626,7 @@ void Assembler::stAssemble(struct instruction *instruction) {
         break;
       } else if(row.name == string(instruction->operand2->symbol) && !row.defined) {
         found = true;
-        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, row.head};
+        forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, row.head};
         row.head = refsList;
         int instructionCode = makeInstructionCode(8, 2, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [[pc+4]]
         push32BitValue(instructionCode, currentSection);
@@ -628,7 +638,7 @@ void Assembler::stAssemble(struct instruction *instruction) {
     }
     
     if(!found) {
-      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, MY_R_X86_64_32S, addend, currentSection.symtabIndex - 1, nullptr};
+      forwardRefsList *refsList = new forwardRefsList{currentSection.locationCounter + 8, currentSection.symtabIndex - 1, nullptr};
       symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, LOC, 0, string(instruction->operand2->symbol), false, refsList});
       int instructionCode = makeInstructionCode(8, 2, 15, 0, instruction->operand1->regNum, 0, 0, 4); // st %gpr, [[pc+4]]
       push32BitValue(instructionCode, currentSection);
@@ -684,7 +694,7 @@ void Assembler::labelAssemble(struct label *label) {
       
       for(forwardRefsList *cur = row.head; cur; cur = cur->next) {
         int symbol = 0;
-        int addend = cur->addend;
+        int addend = 0;
         if(row.bind == LOC) {
           symbol = sections[row.sectionIndex - 1].sectionNum;
           addend += row.value;
@@ -693,7 +703,7 @@ void Assembler::labelAssemble(struct label *label) {
         }
 
         sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
-        sectionToPatch.relaTable.push_back({cur->offset, cur->type, symbol, addend});
+        sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, addend});
       }
 
       break;
@@ -770,7 +780,7 @@ void Assembler::printRelaTables(const sectionStruct& section) {
   for(const auto& row : section.relaTable) {
     cout << left;
     printf("%08X  ", row.offset);
-    cout << setw(20) << (row.type == MY_R_X86_64_32S ? "MY_R_X86_64_32S" : "MY_R_X86_64_PC32")
+    cout << setw(20) << (row.type == MY_R_X86_64_32S ? "MY_R_X86_64_32S" : "")
       << setw(10) << dec << row.symbol
       << setw(10) << dec << row.addend
       << endl;
@@ -918,7 +928,7 @@ void Assembler::elfWrite() {
     for(const auto& rela : section.relaTable) {
       Elf64_Rela elf_rela;
       elf_rela.r_offset = rela.offset;
-      elf_rela.r_info = ELF64_R_INFO(rela.symbol, (rela.type == MY_R_X86_64_32S) ? R_X86_64_32S : R_X86_64_PC32);
+      elf_rela.r_info = ELF64_R_INFO(rela.symbol, (rela.type == MY_R_X86_64_32S) ? R_X86_64_32S : 0);
       elf_rela.r_addend = rela.addend;
       ofs.write(reinterpret_cast<const char*>(&elf_rela), sizeof(elf_rela));
     }

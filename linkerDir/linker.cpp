@@ -10,7 +10,7 @@
 
 using namespace std;
 
-Linker::Linker(string outputFile, map<string, int> place, bool hexBool, bool relocatableBool, vector<string> inputFiles) {
+Linker::Linker(string outputFile, map<string, uint> place, bool hexBool, bool relocatableBool, vector<string> inputFiles) {
   this->outputFile = outputFile;
   this->place = place;
   this->hexBool = hexBool;
@@ -20,7 +20,7 @@ Linker::Linker(string outputFile, map<string, int> place, bool hexBool, bool rel
 
 void Linker::link() {
   for(auto file : inputFiles) elfRead(file);
-  // printInputFilesSections();
+  printInputFilesSections();
 
   mapping();
   symbolDetermination();
@@ -29,6 +29,8 @@ void Linker::link() {
 
   if(hexBool) hexWrite();
   else if(relocatableBool) elfWrite();
+
+  printSymbolTable(newSymbolTable);
 }
 
 void Linker::elfRead(string inputFileName) {
@@ -137,7 +139,7 @@ void Linker::elfRead(string inputFileName) {
 
             relaTableRow relaRow;
             relaRow.offset = elfRela.r_offset;
-            relaRow.type = (ELF64_R_TYPE(elfRela.r_info) == R_X86_64_32S) ? MY_R_X86_64_32S : MY_R_X86_64_PC32;
+            if(ELF64_R_TYPE(elfRela.r_info) == R_X86_64_32S) relaRow.type = MY_R_X86_64_32S;
             relaRow.symbol = ELF64_R_SYM(elfRela.r_info);
             relaRow.addend = elfRela.r_addend;
 
@@ -232,10 +234,10 @@ void Linker::mapping() {
 
       if(!found) {
         if(place.find(sectionToMap.sectionName) != place.end()) {
-          mappedLinkedSections.push_back({sectionToMap.sectionName, place[sectionToMap.sectionName], sectionToMap.locationCounter});
+          mappedLinkedSections.push_back({sectionToMap.sectionName, place[sectionToMap.sectionName], (uint) sectionToMap.locationCounter});
           sectionToMap.addressInLinkedSection = 0;
         } else {
-          mappedLinkedSections.push_back({sectionToMap.sectionName, notFixedSectionsStartAddress + notFixedSectionsTotalSize, sectionToMap.locationCounter});
+          mappedLinkedSections.push_back({sectionToMap.sectionName, notFixedSectionsStartAddress + notFixedSectionsTotalSize, (uint) sectionToMap.locationCounter});
           sectionToMap.addressInLinkedSection = 0;
           notFixedSectionsTotalSize += sectionToMap.locationCounter;
         }
@@ -271,7 +273,7 @@ void Linker::symbolDetermination() {
         if(symbol.type == NOTYP && symbol.bind == GLOB) {
           symbolNames.insert(symbol.name);
 
-          string sectionName;
+          string sectionName = "";
           for(auto &sec : file.symbolTable) {
             if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
               sectionName = sec.name;
@@ -319,7 +321,7 @@ void Linker::symbolDetermination() {
               }
             }
             
-            symbol2.sectionIndex = symbol.sectionIndex;
+            symbol2.sectionName = sectionName;
             symbol2.value = symbol.value + addValue;
           } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
             cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
@@ -329,6 +331,7 @@ void Linker::symbolDetermination() {
       }
     }
   }
+  
 
   for(auto &symbol : newSymbolTable) {
     bool found = false;
@@ -347,7 +350,7 @@ void Linker::symbolDetermination() {
       exit(0);
     }
   }
-  
+
   if(hexBool) {
     for(auto &symbol : newSymbolTable) {
       for(auto &section : mappedLinkedSections) {
@@ -367,7 +370,6 @@ void Linker::symbolResolution() {
       for(auto &relaRow : section.relaTable) {
         int value = 0;
         if(relaRow.type == MY_R_X86_64_32S) value = relaRow.addend;
-        else if(relaRow.type == MY_R_X86_64_PC32) value = relaRow.addend - relaRow.offset;
 
         for(auto &symbol : file.symbolTable) {
           if(symbol.num == relaRow.symbol) {
@@ -444,7 +446,7 @@ void Linker::hexWrite() {
 
   struct hexStruct {
     string sectionName;
-    int position;
+    uint position;
     vector<uint8_t> sectionData8bitValues;
   };
 
@@ -453,7 +455,7 @@ void Linker::hexWrite() {
 
   for(auto &file : inputFilesSections) {
     for(auto &section : file.sections) {
-      int position = section.addressInLinkedSection;
+      uint position = section.addressInLinkedSection;
 
       for(auto &section2 : mappedLinkedSections) {
         if(section2.sectionName == section.sectionName) {
@@ -625,7 +627,7 @@ void Linker::elfWrite() {
     for(const auto& rela : section.relaTable) {
       Elf64_Rela elf_rela;
       elf_rela.r_offset = rela.offset;
-      elf_rela.r_info = ELF64_R_INFO(rela.symbol, (rela.type == MY_R_X86_64_32S) ? R_X86_64_32S : R_X86_64_PC32);
+      elf_rela.r_info = ELF64_R_INFO(rela.symbol, (rela.type == MY_R_X86_64_32S) ? R_X86_64_32S : 0);
       elf_rela.r_addend = rela.addend;
       ofs.write(reinterpret_cast<const char*>(&elf_rela), sizeof(elf_rela));
     }
@@ -674,6 +676,7 @@ void Linker::printSymbolTable(const vector<symbolTableRow> &symbolTable) {
       << setw(10) << (row.bind == LOC ? "LOC" : "GLOB")
       << setw(15) << dec << row.sectionIndex
       << setw(20) << row.name
+      << setw(20) << row.sectionName
       << endl;
   }
   cout << endl;
@@ -694,7 +697,7 @@ void Linker::printRelaTables(const sectionStruct &section) {
   for(const auto& row : section.relaTable) {
     cout << left;
     printf("%08X  ", row.offset);
-    cout << setw(20) << (row.type == MY_R_X86_64_32S ? "MY_R_X86_64_32S" : "MY_R_X86_64_PC32")
+    cout << setw(20) << (row.type == MY_R_X86_64_32S ? "MY_R_X86_64_32S" : "")
       << setw(10) << dec << row.symbol
       << setw(10) << dec << row.addend
       << endl;

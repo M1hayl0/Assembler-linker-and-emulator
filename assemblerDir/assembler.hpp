@@ -8,19 +8,19 @@ using namespace std;
 
 class Assembler {
 private:
+  struct line *code;
+  string outputFileName;
+  
+
   enum symbolType { NOTYP, SCTN };
   enum symbolBind { LOC, GLOB };
   
   enum relaType { 
-    MY_R_X86_64_32S, //symbol value + addend
-    MY_R_X86_64_PC32  //symbol value + addend - offset
+    MY_R_X86_64_32S //symbol value + addend
   };
 
   struct forwardRefsList {
     int offset;
-    relaType type;
-    int addend;
-
     int sectionToPatchNum;
     forwardRefsList *next;
   };
@@ -55,10 +55,6 @@ private:
 
   vector<symbolTableRow> symbolTable;
   vector<sectionStruct> sections;
-
-  struct line *code;
-
-  string outputFileName;
 
 public:
   Assembler(struct line *, char *);

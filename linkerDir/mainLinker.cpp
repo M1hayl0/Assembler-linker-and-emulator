@@ -6,7 +6,7 @@
 
 #include "linker.hpp"
 
-bool parseArgs(int argc, char *argv[], string &outputFile, map<string, int> &place, bool &hex, bool &relocatable, vector<string> &inputFiles) {
+bool parseArgs(int argc, char *argv[], string &outputFile, map<string, uint> &place, bool &hex, bool &relocatable, vector<string> &inputFiles) {
   for(int i = 1; i < argc; ) {
     if(strcmp(argv[i], "-o") == 0)  {
       outputFile = string(argv[i + 1]);
@@ -18,12 +18,11 @@ bool parseArgs(int argc, char *argv[], string &outputFile, map<string, int> &pla
       if(atPos != string::npos) {
         string sectionName = value.substr(0, atPos);
         string addressStr = value.substr(atPos + 1);
-        
-        int address = 0;
+        uint address = 0;
         if (addressStr.find("0x") == 0 || addressStr.find("0X") == 0) {
-          address = stoi(addressStr, nullptr, 16);
+          address = static_cast<uint>(stoul(addressStr, nullptr, 16));
         } else {
-          address = stoi(addressStr);
+          address = static_cast<uint>(stoul(addressStr));
         }
 
         place[sectionName] = address;
@@ -52,18 +51,18 @@ bool parseArgs(int argc, char *argv[], string &outputFile, map<string, int> &pla
 
 int main(int argc, char* argv[]) {
   string outputFile;
-  map<string, int> place;
+  map<string, uint> place;
   bool hex = false;
   bool relocatable = false;
   vector<string> inputFiles;
 
-  if(string(argv[0]) != "./linkerDir/linker") {
-    cout << "Call program like this: ./linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
+  if(string(argv[0]) != "./../../linkerDir/linker") {
+    cout << "Call program like this: ./../../linkerDir/linker[-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
     return 1;
   }
   
   if(!parseArgs(argc, argv, outputFile, place, hex, relocatable, inputFiles)) {
-    cout << "Call program like this: ./linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
+    cout << "Call program like this: ./../../linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
     return 1;
   }
 
