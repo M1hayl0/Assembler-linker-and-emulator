@@ -1,4 +1,4 @@
-#include "emulator.hpp"
+#include "./../inc/emulator.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -6,10 +6,22 @@
 #include <string>
 #include <map>
 #include <iomanip>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <thread>
+#include <chrono>
 
 Emulator::Emulator(char *inputFile) : gprs(16, 0), csrs(16, 0) {
   inputFileName = string(inputFile);
   gprs[15] = 0x40000000;
+
+  timerThread = thread(&Emulator::emulatingTimer, this);
+}
+
+Emulator::~Emulator() {
+  end = true;
+  if(timerThread.joinable()) timerThread.join();
 }
 
 void Emulator::emulate() {
@@ -46,9 +58,11 @@ void Emulator::hexRead() {
 void Emulator::emulatingInstructions() {
   uint32_t instruction;
   bool end = false;
+  int count = 0;
   while(!end) {
+    emulatingTerminal();
+
     instruction = read4Bytes(gprs[15]);
-    cout << "PC " << hex << gprs[15] << endl;
     gprs[15] = gprs[15] + 4;
     uint8_t OC = (instruction >> 28) & 0xF;
     uint8_t MOD = (instruction >> 24) & 0xF;
@@ -62,11 +76,12 @@ void Emulator::emulatingInstructions() {
       case 0:
         if(instruction == 0) {
           end = true;
-          cout << "HALT" << endl;
         } else cout << "UNKNOWN INSTRUCTION" << endl;
         break;
       case 1:
-        if(!MOD && !A && !B && !C && !D) interrupt();
+        if(!MOD && !A && !B && !C && !D) {
+          if(!(csrs[0] & 0x4)) interrupt();
+        }
         else cout << "UNKNOWN INSTRUCTION" << endl;
         break;
       case 2:
@@ -123,9 +138,7 @@ void Emulator::printState() {
 
 
 void Emulator::interrupt() {
-  // push status; push pc; cause<=4; status<=status&(~0x1); pc<=handle; 
-  cout << "INT" << endl;
-
+  // push status; push pc; cause<=4; status<=status | 0x4; pc<=handler; 
   gprs[14] = gprs[14] - 4;
   write4Bytes(gprs[14], csrs[0]);
 
@@ -134,13 +147,12 @@ void Emulator::interrupt() {
 
   csrs[2] = 4;
 
-  csrs[0] = csrs[0] & (~0x1);
+  csrs[0] |= 0x4;
 
   gprs[15] = csrs[1];
 }
 
 void Emulator::call(uint8_t MOD, uint8_t A, uint8_t B, int32_t D) {
-  cout << "CALL" << endl;
   switch(MOD) {
     case 0:
       // push pc; pc<=gpr[A]+gpr[B]+D; 
@@ -163,7 +175,6 @@ void Emulator::call(uint8_t MOD, uint8_t A, uint8_t B, int32_t D) {
 }
 
 void Emulator::jump(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
-  cout << "JUMP" << endl;
   switch(MOD) {
     case 0:
       gprs[15] = gprs[A] + D;
@@ -196,14 +207,14 @@ void Emulator::jump(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
 }
 
 void Emulator::xchg(uint8_t B, uint8_t C) {
-  cout << "XCHG" << endl;
+  if(B == 0 || C == 0) return;
   uint32_t temp = gprs[B];
   gprs[B] = gprs[C];
   gprs[C] = temp;
 }
 
 void Emulator::arit(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
-  cout << "ARIT" << endl;
+  if(A == 0) return;
   switch(MOD) {
     case 0:
       gprs[A] = gprs[B] + gprs[C];
@@ -224,7 +235,7 @@ void Emulator::arit(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
 }
 
 void Emulator::log(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
-  cout << "LOG" << endl;
+  if(A == 0) return;
   switch(MOD) {
     case 0:
       gprs[A] = ~gprs[B];
@@ -245,7 +256,7 @@ void Emulator::log(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
 }
 
 void Emulator::shift(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
-  cout << "SHIFT" << endl;
+  if(A == 0) return;
   switch(MOD) {
   case 0:
     gprs[A] = gprs[B] << gprs[C];
@@ -260,12 +271,12 @@ void Emulator::shift(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C) {
 }
 
 void Emulator::st(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
-  cout << "ST" << endl;
   switch(MOD) {
     case 0:
       write4Bytes(gprs[A] + gprs[B] + D, gprs[C]);
       break;
     case 1:
+      if(A == 0) return;
       gprs[A] = gprs[A] + (int32_t) D;
       write4Bytes(gprs[A], gprs[C]);
       break;
@@ -279,18 +290,21 @@ void Emulator::st(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
 }
 
 void Emulator::ld(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
-  cout << "LD" << endl;
   switch(MOD) {
     case 0:
+      if(A == 0) return;
       gprs[A] = csrs[B];
       break;
     case 1:
+      if(A == 0) return;
       gprs[A] = gprs[B] + D;
       break;
     case 2:
+      if(A == 0) return;
       gprs[A] = read4Bytes(gprs[B] + gprs[C] + D) ;
       break;
     case 3:
+      if(A == 0 || B == 0) return;
       gprs[A] = read4Bytes(gprs[B]);
       gprs[B] = gprs[B] + D;
       break;
@@ -304,6 +318,7 @@ void Emulator::ld(uint8_t MOD, uint8_t A, uint8_t B, uint8_t C, int32_t D) {
       csrs[A] = read4Bytes(gprs[B] + gprs[C] + D);
       break;
     case 7:
+      if(B == 0) return;
       csrs[A] = read4Bytes(gprs[B]);
       gprs[B] = gprs[B] + D;
       break;
@@ -322,4 +337,100 @@ uint32_t Emulator::read4Bytes(uint32_t address) {
 
 void Emulator::write4Bytes(uint32_t address, uint32_t value) {
   for(int i = 0; i < 4; i++) memory[address + i] = static_cast<uint8_t>((value >> 8 * i) & 0xFF);
+}
+
+
+void Emulator::emulatingTerminal() {
+  if(memory.find(TERM_OUT_START) != memory.end()) {
+    uint8_t value = memory[TERM_OUT_START];
+    cout << static_cast<char>(value);
+    cout.flush();
+    memory.erase(TERM_OUT_START);
+  }
+
+  if(!(csrs[0] & 0x2) && !(csrs[0] & 0x4)) {
+    setRawMode(true);
+    setNonBlocking(true);
+
+    char input;
+    if(read(STDIN_FILENO, &input, 1) > 0) {
+      memory[TERM_IN_START] = static_cast<uint8_t>(input);
+      
+      // push status; push pc; cause<=3; status<=status | 0x2; pc<=handler; 
+      gprs[14] = gprs[14] - 4;
+      write4Bytes(gprs[14], csrs[0]);
+
+      gprs[14] = gprs[14] - 4;
+      write4Bytes(gprs[14], gprs[15]);
+
+      csrs[2] = 3;
+
+      csrs[0] |= 0x2;
+
+      gprs[15] = csrs[1];
+    }
+
+    setRawMode(false);
+    setNonBlocking(false);
+  }
+}
+
+void Emulator::setRawMode(bool enable) {
+  static struct termios oldt, newt;
+  if(enable) {
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  } else {
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  }
+}
+
+void Emulator::setNonBlocking(bool enable) {
+  int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+  if(flags == -1) return;
+  if(enable) fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+  else fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+}
+
+
+void Emulator::emulatingTimer() {
+  while(!end) {
+    if(!(csrs[0] & 0x1) && !(csrs[0] & 0x4)) {
+      uint8_t tim_cfg_value = memory[TIM_CFG_START];
+      int period_ms = getTimerPeriod(tim_cfg_value);
+
+      if(period_ms > 0) {
+        this_thread::sleep_for(chrono::milliseconds(period_ms));
+
+        // push status; push pc; cause<=2; status<=status | 0x1; pc<=handler; 
+        gprs[14] = gprs[14] - 4;
+        write4Bytes(gprs[14], csrs[0]);
+
+        gprs[14] = gprs[14] - 4;
+        write4Bytes(gprs[14], gprs[15]);
+
+        csrs[2] = 2;
+
+        csrs[0] |= 0x1;
+
+        gprs[15] = csrs[1];
+      }
+    }
+  }
+}
+
+int Emulator::getTimerPeriod(uint8_t tim_cfg_value) {
+  switch(tim_cfg_value) {
+    case 0x0: return 500;
+    case 0x1: return 1000;
+    case 0x2: return 1500;
+    case 0x3: return 2000;
+    case 0x4: return 5000;
+    case 0x5: return 10000;
+    case 0x6: return 30000;
+    case 0x7: return 60000;
+    default: return -1;
+  }
 }

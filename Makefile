@@ -1,26 +1,22 @@
-all: assemblerAll linkerAll emulatorAll
+all: build assemblerAll linkerAll emulatorAll
 
-test:
-	./assemblerDir/assembler -o ./assemblerDir/output.o test.s
-	./assemblerDir/assembler -o ./assemblerDir/output2.o test2.s
-	./linkerDir/linker -hex -place=code2@0x0100 -o ./linkerDir/mem_content.hex ./assemblerDir/output.o ./assemblerDir/output2.o
-	./linkerDir/linker -relocatable -place=code2@0x0100 -place=code@0x0200 -o ./linkerDir/outputLinker.o ./assemblerDir/output.o ./assemblerDir/output2.o
-	./emulatorDir/emulator ./linkerDir/mem_content.hex
+build:
+	mkdir -p build
 
-assemblerAll: assemblerDir/mainAssembler.cpp assemblerDir/argumentTrasfer.c assemblerDir/parser.c assemblerDir/lexer.c assemblerDir/assembler.cpp assemblerDir/argumentTrasfer.h assemblerDir/assembler.hpp
-	g++ assemblerDir/mainAssembler.cpp assemblerDir/argumentTrasfer.c assemblerDir/parser.c assemblerDir/lexer.c assemblerDir/assembler.cpp -o assemblerDir/assembler
+assemblerAll: src/mainAssembler.cpp src/argumentTrasfer.c build/parser.c build/lexer.c src/assembler.cpp inc/argumentTrasfer.h inc/assembler.hpp
+	g++ src/mainAssembler.cpp src/argumentTrasfer.c build/parser.c build/lexer.c src/assembler.cpp -o build/assembler
 
-assemblerDir/lexer.c: assemblerDir/lexer.l assemblerDir/argumentTrasfer.h
-	flex -o assemblerDir/lexer.c assemblerDir/lexer.l
+build/lexer.c: misc/lexer.l inc/argumentTrasfer.h
+	flex -o build/lexer.c misc/lexer.l
 
-assemblerDir/parser.c: assemblerDir/parser.y assemblerDir/lexer.l assemblerDir/argumentTrasfer.h
-	bison -o assemblerDir/parser.c assemblerDir/parser.y
+build/parser.c: misc/parser.y misc/lexer.l inc/argumentTrasfer.h
+	bison -o build/parser.c misc/parser.y
 
-linkerAll: linkerDir/mainLinker.cpp linkerDir/linker.cpp linkerDir/linker.hpp
-	g++ linkerDir/mainLinker.cpp linkerDir/linker.cpp -o linkerDir/linker
+linkerAll: src/mainLinker.cpp src/linker.cpp inc/linker.hpp
+	g++ src/mainLinker.cpp src/linker.cpp -o build/linker
 
-emulatorAll: emulatorDir/mainEmulator.cpp emulatorDir/emulator.cpp emulatorDir/emulator.hpp
-	g++ emulatorDir/mainEmulator.cpp emulatorDir/emulator.cpp -o emulatorDir/emulator
+emulatorAll: src/mainEmulator.cpp src/emulator.cpp inc/emulator.hpp
+	g++ -pthread src/mainEmulator.cpp src/emulator.cpp -o build/emulator
 
 clean:
-	rm -rf assemblerDir/lexer.c assemblerDir/lexer.h assemblerDir/parser.c assemblerDir/parser.h assemblerDir/assembler linkerDir/linker emulatorDir/emulator tests/*/*.hex tests/*/*.o
+	rm -rf build tests/*/*.hex tests/*/*.o

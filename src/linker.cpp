@@ -1,4 +1,4 @@
-#include "linker.hpp"
+#include "./../inc/linker.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -20,7 +20,7 @@ Linker::Linker(string outputFile, map<string, uint> place, bool hexBool, bool re
 
 void Linker::link() {
   for(auto file : inputFiles) elfRead(file);
-  printInputFilesSections();
+  // printInputFilesSections();
 
   mapping();
   symbolDetermination();
@@ -30,7 +30,7 @@ void Linker::link() {
   if(hexBool) hexWrite();
   else if(relocatableBool) elfWrite();
 
-  printSymbolTable(newSymbolTable);
+  // printSymbolTable(newSymbolTable);
 }
 
 void Linker::elfRead(string inputFileName) {
@@ -676,7 +676,6 @@ void Linker::printSymbolTable(const vector<symbolTableRow> &symbolTable) {
       << setw(10) << (row.bind == LOC ? "LOC" : "GLOB")
       << setw(15) << dec << row.sectionIndex
       << setw(20) << row.name
-      << setw(20) << row.sectionName
       << endl;
   }
   cout << endl;

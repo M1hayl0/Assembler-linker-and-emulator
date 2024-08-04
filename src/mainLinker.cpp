@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstring>
 
-#include "linker.hpp"
+#include "./../inc/linker.hpp"
 
 bool parseArgs(int argc, char *argv[], string &outputFile, map<string, uint> &place, bool &hex, bool &relocatable, vector<string> &inputFiles) {
   for(int i = 1; i < argc; ) {
@@ -56,13 +56,13 @@ int main(int argc, char* argv[]) {
   bool relocatable = false;
   vector<string> inputFiles;
 
-  if(string(argv[0]) != "./../../linkerDir/linker") {
-    cout << "Call program like this: ./../../linkerDir/linker[-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
+  if(string(argv[0]) != "./../../build/linker") {
+    cout << "Call program like this: ./../../build/linker[-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
     return 1;
   }
   
   if(!parseArgs(argc, argv, outputFile, place, hex, relocatable, inputFiles)) {
-    cout << "Call program like this: ./../../linkerDir/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
+    cout << "Call program like this: ./../../build/linker [-hex or -relocatable] -place=code@0x0200 -place=code2@0x0400 -o <output_file> <input_files>\n" << endl;
     return 1;
   }
 
@@ -70,13 +70,6 @@ int main(int argc, char* argv[]) {
     cout << "There must be one -hex or one -relocatable" << endl;
     return 1;
   }
-
-  // cout << "Output File: " << outputFile << endl;
-  // cout << "Place Map: " << endl;
-  // for (const auto &pair : place) cout << pair.first << ": " << hex << pair.second << endl;
-  // cout << "Hex: " << boolalpha << hex << endl;
-  // cout << "Relocatable: " << boolalpha << relocatable << endl;
-  // for (const auto file : inputFiles) cout << file << endl;
 
   Linker *linker = new Linker(outputFile, place, hex, relocatable, inputFiles);
   linker->link();

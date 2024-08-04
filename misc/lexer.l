@@ -1,11 +1,11 @@
 %{
   #include <stdlib.h>
   #include <stdio.h>
-  #include "parser.h"
-  #include "argumentTrasfer.h"
+  #include "./../build/parser.h"
+  #include "./../inc/argumentTrasfer.h"
 %}
 
-%option outfile="assemblerDir/lexer.c" header-file="assemblerDir/lexer.h"
+%option outfile="build/lexer.c" header-file="build/lexer.h"
 
 %option noyywrap
 

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <atomic>
+#include <thread>
 
 using namespace std;
 
@@ -17,8 +19,20 @@ private:
   vector<uint32_t> csrs;
 
 
+  atomic<bool> end;
+  thread timerThread;
+
+  const uint32_t TERM_OUT_START = 0xFFFFFF00;
+  const uint32_t TERM_OUT_END = 0xFFFFFF03;
+  const uint32_t TERM_IN_START = 0xFFFFFF04;
+  const uint32_t TERM_IN_END = 0xFFFFFF07;
+
+  const uint32_t TIM_CFG_START = 0xFFFFFF10;
+  const uint32_t TIM_CFG_END = 0xFFFFFF13;
+
 public:
   Emulator(char *);
+  ~Emulator();
   void emulate();
 
   void hexRead();
@@ -37,6 +51,13 @@ public:
 
   uint32_t read4Bytes(uint32_t);
   void write4Bytes(uint32_t, uint32_t);
+
+  void emulatingTerminal();
+  void setRawMode(bool);
+  void setNonBlocking(bool);
+
+  void emulatingTimer();
+  int getTimerPeriod(uint8_t);
 };
 
 #endif // EMULATOR_H

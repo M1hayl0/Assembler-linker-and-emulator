@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <iostream>
 
-#include "emulator.hpp"
+#include "./../inc/emulator.hpp"
 
 int main(int argc, char* argv[]) {
-  if(argc < 2 || string(argv[0]) != "./../../emulatorDir/emulator") {
-    cout << "Call program like this: ./../../emulatorDir/emulator <input_file>\n" << endl;
+  if(argc < 2 || string(argv[0]) != "./../../build/emulator") {
+    cout << "Call program like this: ./../../build/emulator <input_file>\n" << endl;
     return 1;
   }
 

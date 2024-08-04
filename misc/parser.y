@@ -1,13 +1,13 @@
 %{
   #include <stdio.h>
-  #include "argumentTrasfer.h"
+  #include "./../inc/argumentTrasfer.h"
 
   void yyerror(const char *s);
   int yylex(void);
 %}
 
-%output "assemblerDir/parser.c"
-%defines "assemblerDir/parser.h"
+%output "build/parser.c"
+%defines "build/parser.h"
 
 %union {
   int numLit;

@@ -1,5 +1,5 @@
-#include "assembler.hpp"
-#include "argumentTrasfer.h"
+#include "./../inc/assembler.hpp"
+#include "./../inc/argumentTrasfer.h"
 
 #include <elf.h>
 #include <fstream>
