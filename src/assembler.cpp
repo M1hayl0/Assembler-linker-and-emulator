@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cstring>
 #include <iomanip>
+#include <map>
 
 
 Assembler::Assembler(struct line *lines, char *outputFile) {
@@ -93,18 +94,9 @@ void Assembler::assemble() {
     }
   }
 
-  for(auto& row : symbolTable) {
-    if(row.num != 0 && row.sectionIndex == 0 && row.bind == GLOB) {
-      for(forwardRefsList *cur = row.head; cur; cur = cur->next) {
-        int symbol = row.num;
-        sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
-        sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, 0});
-      }
-    } else if(row.num != 0 && row.sectionIndex == 0 && row.bind == LOC) {
-      cout << "UNRESOLVED SYMBOL" << endl;
-      exit(0);
-    }
-  }
+  externSymbolsBackpatch();
+  equBackpatch();
+  ldStBackpatch();
 
   // printSymbolTable();
   // printSections();
@@ -213,7 +205,12 @@ void Assembler::asciiAssemble(struct directive *directive) {
   }
 }
 
-void Assembler::equAssemble(struct directive *directive) {}
+void Assembler::equAssemble(struct directive *directive) {
+  struct operandArgs *symbol = directive->operands;
+  struct operandArgs *expresion = directive->operands->next;
+  symbol->next = nullptr;
+  equTable.push_back({symbol, expresion});
+}
 
 
 void Assembler::haltAssemble(struct instruction *instruction) {
@@ -582,8 +579,8 @@ void Assembler::ldAssemble(struct instruction *instruction) {
     int instructionCode = makeInstructionCode(9, 2, instruction->operand2->regNum, instruction->operand1->regNum, 0, d1, d2, d3); // ld [%gpr + lit], %gpr
     push32BitValue(instructionCode, currentSection);
   } else if(instruction->operand1->type == regMemSymType) {
-    printf("SYMBOL VALUE IS UNKNOWN\n"); // change this later for equ
-    exit(0);
+    ldStRegMemSym.push_back({instruction, true, currentSection.symtabIndex - 1, (int) currentSection.sectionData8bitValues.size()});
+    push32BitValue(0, currentSection);
   }
 }
 
@@ -663,8 +660,8 @@ void Assembler::stAssemble(struct instruction *instruction) {
     int instructionCode = makeInstructionCode(8, 0, instruction->operand2->regNum, 0, instruction->operand1->regNum, d1, d2, d3); // st %gpr, [%gpr + lit]
     push32BitValue(instructionCode, currentSection);
   } else if(instruction->operand2->type == regMemSymType) {
-    printf("SYMBOL VALUE IS UNKNOWN\n"); // change this later for equ
-    exit(0);
+    ldStRegMemSym.push_back({instruction, false, currentSection.symtabIndex - 1, (int) currentSection.sectionData8bitValues.size()});
+    push32BitValue(0, currentSection);
   }
 }
 
@@ -686,7 +683,7 @@ void Assembler::labelAssemble(struct label *label) {
   
   bool found = false;
   for(auto &row : symbolTable) {
-    if(row.name == string(label->operand->symbol) && !row.defined) {
+    if(!found && row.name == string(label->operand->symbol) && !row.defined) {
       found = true;
       row.defined = true;
       row.value = currentSection.locationCounter;
@@ -705,8 +702,6 @@ void Assembler::labelAssemble(struct label *label) {
         sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
         sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, addend});
       }
-
-      break;
     } else if(row.name == string(label->operand->symbol) && row.defined) {
       printf("TWO SYMBOLS WITH SAME NAME\n");
       exit(0);
@@ -715,6 +710,196 @@ void Assembler::labelAssemble(struct label *label) {
   
   if(!found) {
     symbolTable.push_back({(int) symbolTable.size(), currentSection.locationCounter, NOTYP, LOC, currentSection.symtabIndex, string(label->operand->symbol), true, nullptr});
+  }
+}
+
+
+void Assembler::externSymbolsBackpatch() {
+  for(auto &row : symbolTable) {
+    bool found = false;
+    for(auto &row2 : equTable) {
+      if(row2.symbol->symbol == row.name) {
+        found = true;
+        break;
+      }
+    }
+
+    if(!found) {
+      if(row.num != 0 && row.sectionIndex == 0 && row.bind == GLOB) {
+        for(forwardRefsList *cur = row.head; cur; cur = cur->next) {
+          int symbol = row.num;
+          sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
+          sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, 0});
+        }
+      } else if(row.num != 0 && row.sectionIndex == 0 && row.bind == LOC) {
+        cout << "UNRESOLVED SYMBOL" << endl;
+        exit(0);
+      }
+    }
+  }
+}
+
+void Assembler::equBackpatch() {
+  for(auto &row : equTable) {
+    map<int, int> sectionsRelocatable;
+
+    for(struct operandArgs *cur = row.expresion; cur; cur = cur->next) {
+      if(cur->type == symType) {
+        for(auto &row2 : symbolTable) {
+          if(cur->symbol == row2.name && row2.sectionIndex != -1) {
+            if(row2.sectionIndex == 0) {
+              cout << "CAN'T USE EXTERN SYMBOLS FOR EQU" << endl;
+              exit(0);
+            }
+
+            if(sectionsRelocatable.find(row2.sectionIndex) != sectionsRelocatable.end()) {
+              if(cur->minus) sectionsRelocatable[row2.sectionIndex]--;
+              else sectionsRelocatable[row2.sectionIndex]++;
+            } else {
+              if(cur->minus) sectionsRelocatable[row2.sectionIndex] = -1;
+              else sectionsRelocatable[row2.sectionIndex] = 1;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    bool foundOne = false;
+    for(auto& section : sectionsRelocatable) {
+      if(section.second == 1) {
+        if(foundOne) {
+          cout << "SYMBOL IS NOT RELOCATABLE" << endl;
+          exit(0);
+        } else {
+          foundOne = true;
+          row.sectionIndex = section.first;
+        }
+      } else if(section.second != 0) {
+        cout << "SYMBOL IS NOT RELOCATABLE" << endl;
+        exit(0);
+      }
+    }
+  }
+
+  bool end = false;
+  while(!end) {
+    end = true;
+    for(auto &equRow : equTable) {
+      if(!equRow.done) {
+        int value = 0;
+        bool cantDefine = false;
+        for(struct operandArgs *cur = equRow.expresion; cur; cur = cur->next) {
+          if(cur->type == symType) {
+            bool foundSym = false;
+            for(auto &symbol : symbolTable) {
+              if(cur->symbol == symbol.name) {
+                if(!symbol.defined) {
+                  cantDefine = true;
+                  break;
+                }
+                foundSym = true;
+                if(cur->minus) value -= symbol.value;
+                else value += symbol.value;
+                break;
+              }
+            }
+            if(!foundSym) cantDefine = true;
+          } else if(cur->type == litType) {
+            if(cur->minus) value -= cur->literal;
+            else value += cur->literal;
+          }
+          if(cantDefine) break;
+        }
+
+        if(cantDefine) continue;
+        end = false;
+        equRow.done = true;
+
+        bool found = false;
+        for(auto &symbolRow : symbolTable) {
+          if(!found && symbolRow.name == equRow.symbol->symbol && !symbolRow.defined) {
+            found = true;
+            
+            symbolRow.defined = true;
+            symbolRow.value = value;
+            symbolRow.sectionIndex = equRow.sectionIndex;
+            
+            for(forwardRefsList *cur = symbolRow.head; cur; cur = cur->next) {
+              if(equRow.sectionIndex == -1) {
+                //absolute symbol
+                sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
+                for(int i = 0; i < 4; i++) {
+                  sectionToPatch.sectionData8bitValues[cur->offset + i] = (symbolRow.value >> (8 * i)) & 0xFF;
+                }
+              } else {
+                //relative symbol
+                int symbol = 0;
+                int addend = 0;
+                if(symbolRow.bind == LOC) {
+                  symbol = sections[symbolRow.sectionIndex - 1].sectionNum;
+                  addend += symbolRow.value;
+                } else if(symbolRow.bind == GLOB) {
+                  symbol = symbolRow.num;
+                }
+
+                sectionStruct &sectionToPatch = sections[cur->sectionToPatchNum];
+                sectionToPatch.relaTable.push_back({cur->offset, MY_R_X86_64_32S, symbol, addend});
+              }
+
+            }
+          } else if(symbolRow.name == equRow.symbol->symbol && symbolRow.defined) {
+            printf("TWO SYMBOLS WITH SAME NAME\n");
+            exit(0);
+          }
+        }
+
+        if(!found) {
+          symbolTable.push_back({(int) symbolTable.size(), value, NOTYP, LOC, equRow.sectionIndex, equRow.symbol->symbol, true, nullptr});
+        }
+      }
+    }
+  }
+
+  for(auto &equRow : equTable) {
+    if(!equRow.done) {
+      printf("NOT ALL EQU SYMBOLS ARE DEFINED\n");
+      exit(0);
+    }
+  }
+}
+
+void Assembler::ldStBackpatch() {
+  for(auto &row : ldStRegMemSym) {
+    int value = 0;
+    for(auto &symbol : symbolTable) {
+      if((row.ld && symbol.name == row.instruction->operand1->symbol) || (!row.ld && symbol.name == row.instruction->operand2->symbol)) {
+        if(symbol.sectionIndex == -1) {
+          value = symbol.value;
+          break;
+        } else {
+          printf("SYMBOL MUST BE DEFINED\n");
+          exit(0);
+        }
+      }
+    }
+
+    if((uint32_t) value > 0xFFF) {
+      printf("MAX SYMBOL VALUE FOR THIS ADDRESSING IS 0xFFF\n");
+      exit(0);
+    }
+
+    int d1 = (value >> 8) & 0xF;
+    int d2 = (value >> 4) & 0xF;
+    int d3 = value & 0xF;
+    int instructionCode;
+    if(row.ld) instructionCode = makeInstructionCode(9, 2, row.instruction->operand2->regNum, row.instruction->operand1->regNum, 0, d1, d2, d3); // ld [%gpr + sym], %gpr
+    else instructionCode = makeInstructionCode(8, 0, row.instruction->operand2->regNum, 0, row.instruction->operand1->regNum, d1, d2, d3); // st %gpr, [%gpr + sym]
+
+    sectionStruct &sectionToPatch = sections[row.sectionNum];
+    for(int i = 0; i < 4; i++) {
+      sectionToPatch.sectionData8bitValues[row.offset + i] = (instructionCode >> (8 * i)) & 0xFF;
+    }
   }
 }
 
@@ -943,7 +1128,7 @@ void Assembler::elfWrite() {
     symbol.st_name = strtab.size(); // Offset in strtab
     symbol.st_info = ELF64_ST_INFO((sym.bind == GLOB) ? STB_GLOBAL : STB_LOCAL, (sym.type == SCTN) ? STT_SECTION : STT_NOTYPE);
     symbol.st_other = 0;
-    symbol.st_shndx = sym.sectionIndex;
+    symbol.st_shndx = (sym.sectionIndex == -1 ? SHN_ABS : sym.sectionIndex);
     symbol.st_value = sym.value;
     symbol.st_size = 0; // Size is usually set by the linker
     ofs.write(reinterpret_cast<char*>(&symbol), sizeof(symbol));

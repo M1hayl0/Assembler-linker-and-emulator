@@ -15,7 +15,7 @@ private:
   enum symbolType { NOTYP, SCTN };
   enum symbolBind { LOC, GLOB };
   
-  enum relaType { 
+  enum relaType {
     MY_R_X86_64_32S //symbol value + addend
   };
 
@@ -56,6 +56,25 @@ private:
   vector<symbolTableRow> symbolTable;
   vector<sectionStruct> sections;
 
+
+  struct equTableRow {
+    struct operandArgs *symbol;
+    struct operandArgs *expresion;
+    int sectionIndex = -1;
+    bool done = false;
+  };
+
+  vector<equTableRow> equTable;
+
+  struct ldStRegMemSymRow {
+    struct instruction *instruction;
+    bool ld;
+    int sectionNum;
+    int offset;
+  };
+
+  vector<ldStRegMemSymRow> ldStRegMemSym;
+
 public:
   Assembler(struct line *, char *);
   void assemble();
@@ -86,6 +105,10 @@ public:
   void csrwrAssemble(struct instruction *);
 
   void labelAssemble(struct label *);
+
+  void externSymbolsBackpatch();
+  void equBackpatch();
+  void ldStBackpatch();
 
   void push32BitValue(int, sectionStruct &);
   int makeInstructionCode(int, int, int, int, int, int, int, int);

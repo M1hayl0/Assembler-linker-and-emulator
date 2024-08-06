@@ -12,16 +12,20 @@
 #include <thread>
 #include <chrono>
 
-Emulator::Emulator(char *inputFile) : gprs(16, 0), csrs(16, 0) {
+Emulator::Emulator(char *inputFile) : gprs(16, 0), csrs(3, 0) {
   inputFileName = string(inputFile);
   gprs[15] = 0x40000000;
 
   timerThread = thread(&Emulator::emulatingTimer, this);
+
+  sem_init(&mutex, 0, 1);
 }
 
 Emulator::~Emulator() {
   end = true;
   if(timerThread.joinable()) timerThread.join();
+
+  sem_destroy(&mutex);
 }
 
 void Emulator::emulate() {
@@ -58,8 +62,14 @@ void Emulator::hexRead() {
 void Emulator::emulatingInstructions() {
   uint32_t instruction;
   bool end = false;
-  int count = 0;
+
+  setRawMode(true);
+  setNonBlocking(true);
+  
+  bool asd = false;
   while(!end) {
+    sem_wait(&mutex);
+    
     emulatingTerminal();
 
     instruction = read4Bytes(gprs[15]);
@@ -79,9 +89,7 @@ void Emulator::emulatingInstructions() {
         } else cout << "UNKNOWN INSTRUCTION" << endl;
         break;
       case 1:
-        if(!MOD && !A && !B && !C && !D) {
-          if(!(csrs[0] & 0x4)) interrupt();
-        }
+        if(!MOD && !A && !B && !C && !D) interrupt();
         else cout << "UNKNOWN INSTRUCTION" << endl;
         break;
       case 2:
@@ -117,7 +125,11 @@ void Emulator::emulatingInstructions() {
         cout << "UNKNOWN INSTRUCTION" << endl;
         break;
     }
+    sem_post(&mutex);
   }
+
+  setRawMode(false);
+  setNonBlocking(false);
 }
 
 void Emulator::printState() {
@@ -138,18 +150,20 @@ void Emulator::printState() {
 
 
 void Emulator::interrupt() {
-  // push status; push pc; cause<=4; status<=status | 0x4; pc<=handler; 
-  gprs[14] = gprs[14] - 4;
-  write4Bytes(gprs[14], csrs[0]);
+  if(!(csrs[0] & 0x4)) {
+    // push status; push pc; cause<=4; status<=status | 0x4; pc<=handler; 
+    gprs[14] = gprs[14] - 4;
+    write4Bytes(gprs[14], csrs[0]);
 
-  gprs[14] = gprs[14] - 4;
-  write4Bytes(gprs[14], gprs[15]);
+    gprs[14] = gprs[14] - 4;
+    write4Bytes(gprs[14], gprs[15]);
 
-  csrs[2] = 4;
+    csrs[2] = 4;
 
-  csrs[0] |= 0x4;
+    csrs[0] |= 0x4;
 
-  gprs[15] = csrs[1];
+    gprs[15] = csrs[1];
+  }
 }
 
 void Emulator::call(uint8_t MOD, uint8_t A, uint8_t B, int32_t D) {
@@ -349,9 +363,6 @@ void Emulator::emulatingTerminal() {
   }
 
   if(!(csrs[0] & 0x2) && !(csrs[0] & 0x4)) {
-    setRawMode(true);
-    setNonBlocking(true);
-
     char input;
     if(read(STDIN_FILENO, &input, 1) > 0) {
       memory[TERM_IN_START] = static_cast<uint8_t>(input);
@@ -369,9 +380,6 @@ void Emulator::emulatingTerminal() {
 
       gprs[15] = csrs[1];
     }
-
-    setRawMode(false);
-    setNonBlocking(false);
   }
 }
 
@@ -397,31 +405,37 @@ void Emulator::setNonBlocking(bool enable) {
 
 void Emulator::emulatingTimer() {
   while(!end) {
-    if(!(csrs[0] & 0x1) && !(csrs[0] & 0x4)) {
-      uint8_t tim_cfg_value = memory[TIM_CFG_START];
-      int period_ms = getTimerPeriod(tim_cfg_value);
+    sem_wait(&mutex);
+    if(memory.find(TIM_CFG_START) != memory.end()) {
+      if(!(csrs[0] & 0x1) && !(csrs[0] & 0x4)) {
+        int tim_cfg_value = memory[TIM_CFG_START];
+        int period_ms = getTimerPeriod(tim_cfg_value);
 
-      if(period_ms > 0) {
-        this_thread::sleep_for(chrono::milliseconds(period_ms));
+        if(period_ms > 0) {
+          sem_post(&mutex);
+          this_thread::sleep_for(chrono::milliseconds(period_ms));
+          sem_wait(&mutex);
 
-        // push status; push pc; cause<=2; status<=status | 0x1; pc<=handler; 
-        gprs[14] = gprs[14] - 4;
-        write4Bytes(gprs[14], csrs[0]);
+          // push status; push pc; cause<=2; status<=status | 0x1; pc<=handler; 
+          gprs[14] = gprs[14] - 4;
+          write4Bytes(gprs[14], csrs[0]);
 
-        gprs[14] = gprs[14] - 4;
-        write4Bytes(gprs[14], gprs[15]);
+          gprs[14] = gprs[14] - 4;
+          write4Bytes(gprs[14], gprs[15]);
 
-        csrs[2] = 2;
+          csrs[2] = 2;
 
-        csrs[0] |= 0x1;
+          csrs[0] |= 0x1;
 
-        gprs[15] = csrs[1];
+          gprs[15] = csrs[1];
+        }
       }
     }
+    sem_post(&mutex);
   }
 }
 
-int Emulator::getTimerPeriod(uint8_t tim_cfg_value) {
+int Emulator::getTimerPeriod(int tim_cfg_value) {
   switch(tim_cfg_value) {
     case 0x0: return 500;
     case 0x1: return 1000;

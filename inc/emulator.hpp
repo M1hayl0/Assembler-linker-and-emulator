@@ -6,6 +6,7 @@
 #include <map>
 #include <atomic>
 #include <thread>
+#include <semaphore.h>
 
 using namespace std;
 
@@ -29,6 +30,8 @@ private:
 
   const uint32_t TIM_CFG_START = 0xFFFFFF10;
   const uint32_t TIM_CFG_END = 0xFFFFFF13;
+
+  sem_t mutex;
 
 public:
   Emulator(char *);
@@ -57,7 +60,7 @@ public:
   void setNonBlocking(bool);
 
   void emulatingTimer();
-  int getTimerPeriod(uint8_t);
+  int getTimerPeriod(int);
 };
 
 #endif // EMULATOR_H

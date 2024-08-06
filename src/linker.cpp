@@ -117,6 +117,7 @@ void Linker::elfRead(string inputFileName) {
         symRow.type = (elfSym.st_info & 0xf) == STT_SECTION ? SCTN : NOTYP;
         symRow.bind = (elfSym.st_info >> 4) == STB_GLOBAL ? GLOB : LOC;
         symRow.sectionIndex = elfSym.st_shndx;
+        if(symRow.sectionIndex == SHN_ABS) symRow.sectionIndex = -1;
         symRow.name = ""; // Name will be filled later from strtab
         symRow.nameElf = elfSym.st_name;
 
@@ -268,44 +269,13 @@ void Linker::symbolDetermination() {
   newSymbolTable.push_back({(int) newSymbolTable.size(), 0, NOTYP, LOC, 0, string()});
   for(auto &file : inputFilesSections) {
     for(auto &symbol : file.symbolTable) {
-      if(symbol.num == 0) continue;
-      if(symbolNames.find(symbol.name) == symbolNames.end() && sectionNames.find(symbol.name) == sectionNames.end()) {
-        if(symbol.type == NOTYP && symbol.bind == GLOB) {
-          symbolNames.insert(symbol.name);
+      if(symbol.sectionIndex != -1) {
+        if(symbol.num == 0) continue;
+        if(symbolNames.find(symbol.name) == symbolNames.end() && sectionNames.find(symbol.name) == sectionNames.end()) {
+          if(symbol.type == NOTYP && symbol.bind == GLOB) {
+            symbolNames.insert(symbol.name);
 
-          string sectionName = "";
-          for(auto &sec : file.symbolTable) {
-            if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
-              sectionName = sec.name;
-              break;
-            }
-          }
-
-          int addValue = 0;
-          for(auto &sec : file.sections) {
-            if(sec.sectionName == sectionName) {
-              addValue = sec.addressInLinkedSection;
-              break;
-            }
-          }
-
-          newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, 0, symbol.name, 0, sectionName});
-        } else if(symbol.type == SCTN){
-          sectionNames.insert(symbol.name);
-
-          int addValue = 0;
-          for(auto &sec : file.sections) {
-            if(sec.sectionName == symbol.name) {
-              addValue = sec.addressInLinkedSection;
-            }
-          }
-
-          newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, lastSectionIndex++, symbol.name, 0, symbol.name});
-        }
-      } else {
-        for(auto &symbol2 : newSymbolTable) {
-          if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
-            string sectionName;
+            string sectionName = "";
             for(auto &sec : file.symbolTable) {
               if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
                 sectionName = sec.name;
@@ -320,12 +290,62 @@ void Linker::symbolDetermination() {
                 break;
               }
             }
-            
-            symbol2.sectionName = sectionName;
-            symbol2.value = symbol.value + addValue;
-          } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
-            cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
-            exit(0);
+
+            newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, 0, symbol.name, 0, sectionName});
+          } else if(symbol.type == SCTN){
+            sectionNames.insert(symbol.name);
+
+            int addValue = 0;
+            for(auto &sec : file.sections) {
+              if(sec.sectionName == symbol.name) {
+                addValue = sec.addressInLinkedSection;
+              }
+            }
+
+            newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value + addValue, symbol.type, symbol.bind, lastSectionIndex++, symbol.name, 0, symbol.name});
+          }
+        } else {
+          for(auto &symbol2 : newSymbolTable) {
+            if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
+              string sectionName;
+              for(auto &sec : file.symbolTable) {
+                if(sec.type == SCTN && sec.sectionIndex == symbol.sectionIndex) {
+                  sectionName = sec.name;
+                  break;
+                }
+              }
+
+              int addValue = 0;
+              for(auto &sec : file.sections) {
+                if(sec.sectionName == sectionName) {
+                  addValue = sec.addressInLinkedSection;
+                  break;
+                }
+              }
+              
+              symbol2.sectionName = sectionName;
+              symbol2.value = symbol.value + addValue;
+            } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.sectionIndex != 0 && symbol.name == symbol2.name) {
+              cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
+              exit(0);
+            }
+          }
+        }
+      } else {
+        if(symbolNames.find(symbol.name) == symbolNames.end()) {
+          if(symbol.type == NOTYP && symbol.bind == GLOB) {
+            symbolNames.insert(symbol.name);
+            newSymbolTable.push_back({(int) newSymbolTable.size(), symbol.value, symbol.type, symbol.bind, symbol.sectionIndex, symbol.name, 0, ""});
+          }
+        } else {
+          for(auto &symbol2 : newSymbolTable) {
+            if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.name == symbol2.name) {
+              symbol2.sectionIndex = -1;
+              symbol2.value = symbol.value;
+            } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.name == symbol2.name) {
+              cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
+              exit(0);
+            }
           }
         }
       }
@@ -335,7 +355,7 @@ void Linker::symbolDetermination() {
 
   for(auto &symbol : newSymbolTable) {
     bool found = false;
-    if(symbol.type == NOTYP) {
+    if(symbol.type == NOTYP && symbol.sectionIndex != -1) {
       for(auto &symbol2 : newSymbolTable) {
         if(symbol2.type == SCTN && symbol.sectionName == symbol2.name) {
           symbol.sectionIndex = symbol2.sectionIndex;
@@ -353,9 +373,11 @@ void Linker::symbolDetermination() {
 
   if(hexBool) {
     for(auto &symbol : newSymbolTable) {
-      for(auto &section : mappedLinkedSections) {
-        if(symbol.sectionName == section.sectionName) {
-          symbol.value += section.startAddress;
+      if(symbol.sectionIndex != -1) {
+        for(auto &section : mappedLinkedSections) {
+          if(symbol.sectionName == section.sectionName) {
+            symbol.value += section.startAddress;
+          }
         }
       }
     }
@@ -369,13 +391,14 @@ void Linker::symbolResolution() {
     for(auto &section : file.sections) {
       for(auto &relaRow : section.relaTable) {
         int value = 0;
-        if(relaRow.type == MY_R_X86_64_32S) value = relaRow.addend;
-
+        if(relaRow.type == MY_R_X86_64_32S) value += relaRow.addend;
+        
         for(auto &symbol : file.symbolTable) {
           if(symbol.num == relaRow.symbol) {
             for(auto &symbol2 : newSymbolTable) {
               if(symbol2.name == symbol.name) {
                 value += symbol2.value;
+                if(symbol2.type == SCTN) value += section.addressInLinkedSection;
                 break;
               }
             }
