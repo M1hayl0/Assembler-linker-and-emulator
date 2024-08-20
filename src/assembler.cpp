@@ -20,73 +20,73 @@ void Assembler::assemble() {
     if(currentLine->directive) {
       if(strcmp(currentLine->directive->name, ".global") == 0) {
         globalAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".extern") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".extern") == 0) {
         externAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".section") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".section") == 0) {
         sectionAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".word") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".word") == 0) {
         wordAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".skip") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".skip") == 0) {
         skipAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".ascii") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".ascii") == 0) {
         asciiAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".equ") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".equ") == 0) {
         equAssemble(currentLine->directive);
-      } else if (strcmp(currentLine->directive->name, ".end") == 0) {
+      } else if(strcmp(currentLine->directive->name, ".end") == 0) {
         break;
       }
     } else if(currentLine->instruction) {
-      if (strcmp(currentLine->instruction->name, "halt") == 0) {
+      if(strcmp(currentLine->instruction->name, "halt") == 0) {
         haltAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "int") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "int") == 0) {
         intAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "iret") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "iret") == 0) {
         iretAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "call") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "call") == 0) {
         callAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "ret") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "ret") == 0) {
         retAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "jmp") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "jmp") == 0) {
         jmpAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "beq") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "beq") == 0) {
         beqBneBgtAssemble(currentLine->instruction, 0x9);
-      } else if (strcmp(currentLine->instruction->name, "bne") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "bne") == 0) {
         beqBneBgtAssemble(currentLine->instruction, 0xA);
-      } else if (strcmp(currentLine->instruction->name, "bgt") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "bgt") == 0) {
         beqBneBgtAssemble(currentLine->instruction, 0xB);
-      } else if (strcmp(currentLine->instruction->name, "push") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "push") == 0) {
         pushAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "pop") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "pop") == 0) {
         popAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "xchg") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "xchg") == 0) {
         xchgAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "add") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "add") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x5, 0x0);
-      } else if (strcmp(currentLine->instruction->name, "sub") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "sub") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x5, 0x1);
-      } else if (strcmp(currentLine->instruction->name, "mul") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "mul") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x5, 0x2);
-      } else if (strcmp(currentLine->instruction->name, "div") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "div") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x5, 0x3);
-      } else if (strcmp(currentLine->instruction->name, "not") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "not") == 0) {
         notAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "and") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "and") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x6, 0x1);
-      } else if (strcmp(currentLine->instruction->name, "or") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "or") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x6, 0x2);
-      } else if (strcmp(currentLine->instruction->name, "xor") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "xor") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x6, 0x3);
-      } else if (strcmp(currentLine->instruction->name, "shl") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "shl") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x7, 0x0);
-      } else if (strcmp(currentLine->instruction->name, "shr") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "shr") == 0) {
         aritLogShiftAssemble(currentLine->instruction, 0x7, 0x1);
-      } else if (strcmp(currentLine->instruction->name, "ld") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "ld") == 0) {
         ldAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "st") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "st") == 0) {
         stAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "csrrd") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "csrrd") == 0) {
         csrrdAssemble(currentLine->instruction);
-      } else if (strcmp(currentLine->instruction->name, "csrwr") == 0) {
+      } else if(strcmp(currentLine->instruction->name, "csrwr") == 0) {
         csrwrAssemble(currentLine->instruction);
       }
     } else if(currentLine->label) {

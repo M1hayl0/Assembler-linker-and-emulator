@@ -440,7 +440,7 @@ void Linker::makeRelocatableNewSections() {
               }
             }
 
-            for(auto &symbol : newSymbolTable) {
+            for(auto &symbol : relocatableNewSymbolTable) {
               if(newSymbolName == symbol.name) {
                 newSymbolNum = symbol.num;
                 break;
@@ -448,7 +448,14 @@ void Linker::makeRelocatableNewSections() {
             }
 
             int addend = relaRow.addend;
-            if(newSymbolType == SCTN) addend += section.addressInLinkedSection;
+            if(newSymbolType == SCTN) {
+              for(auto &section3 : file.sections) {
+                if(section3.sectionName == newSymbolName) {
+                  addend += section3.addressInLinkedSection;
+                  break;
+                }
+              }
+            }
 
             section2.relaTable.push_back({relaRow.offset + section.addressInLinkedSection, relaRow.type, newSymbolNum, addend});
           }
@@ -457,7 +464,6 @@ void Linker::makeRelocatableNewSections() {
       }
     }
   }
-
 }
 
 void Linker::hexWrite() {

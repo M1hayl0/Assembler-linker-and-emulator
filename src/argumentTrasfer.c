@@ -25,25 +25,25 @@ char* removeFirstAndLastChar(const char* str) {
 }
 
 int getRegNum(char *regName) {
-  if (strcmp(regName, "r0") == 0) return 0;
-  else if (strcmp(regName, "r1") == 0) return 1;
-  else if (strcmp(regName, "r2") == 0) return 2;
-  else if (strcmp(regName, "r3") == 0) return 3;
-  else if (strcmp(regName, "r4") == 0) return 4;
-  else if (strcmp(regName, "r5") == 0) return 5;
-  else if (strcmp(regName, "r6") == 0) return 6;
-  else if (strcmp(regName, "r7") == 0) return 7;
-  else if (strcmp(regName, "r8") == 0) return 8;
-  else if (strcmp(regName, "r9") == 0) return 9;
-  else if (strcmp(regName, "r10") == 0) return 10;
-  else if (strcmp(regName, "r11") == 0) return 11;
-  else if (strcmp(regName, "r12") == 0) return 12;
-  else if (strcmp(regName, "r13") == 0) return 13;
-  else if (strcmp(regName, "r14") == 0 || strcmp(regName, "sp") == 0) return 14;
-  else if (strcmp(regName, "r15") == 0 || strcmp(regName, "pc") == 0) return 15;
-  else if (strcmp(regName, "status") == 0) return 16;
-  else if (strcmp(regName, "handler") == 0) return 17;
-  else if (strcmp(regName, "cause") == 0) return 18;
+  if(strcmp(regName, "r0") == 0) return 0;
+  else if(strcmp(regName, "r1") == 0) return 1;
+  else if(strcmp(regName, "r2") == 0) return 2;
+  else if(strcmp(regName, "r3") == 0) return 3;
+  else if(strcmp(regName, "r4") == 0) return 4;
+  else if(strcmp(regName, "r5") == 0) return 5;
+  else if(strcmp(regName, "r6") == 0) return 6;
+  else if(strcmp(regName, "r7") == 0) return 7;
+  else if(strcmp(regName, "r8") == 0) return 8;
+  else if(strcmp(regName, "r9") == 0) return 9;
+  else if(strcmp(regName, "r10") == 0) return 10;
+  else if(strcmp(regName, "r11") == 0) return 11;
+  else if(strcmp(regName, "r12") == 0) return 12;
+  else if(strcmp(regName, "r13") == 0) return 13;
+  else if(strcmp(regName, "r14") == 0 || strcmp(regName, "sp") == 0) return 14;
+  else if(strcmp(regName, "r15") == 0 || strcmp(regName, "pc") == 0) return 15;
+  else if(strcmp(regName, "status") == 0) return 16;
+  else if(strcmp(regName, "handler") == 0) return 17;
+  else if(strcmp(regName, "cause") == 0) return 18;
   return -1;
 }
 
