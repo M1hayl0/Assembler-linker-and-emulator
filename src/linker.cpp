@@ -286,7 +286,7 @@ void Linker::symbolDetermination() {
             int addValue = 0;
             for(auto &sec : file.sections) {
               if(sec.sectionName == sectionName) {
-                addValue = sec.addressInLinkedSection;
+                addValue += sec.addressInLinkedSection;
                 break;
               }
             }
@@ -298,7 +298,7 @@ void Linker::symbolDetermination() {
             int addValue = 0;
             for(auto &sec : file.sections) {
               if(sec.sectionName == symbol.name) {
-                addValue = sec.addressInLinkedSection;
+                addValue += sec.addressInLinkedSection;
               }
             }
 
@@ -318,7 +318,7 @@ void Linker::symbolDetermination() {
               int addValue = 0;
               for(auto &sec : file.sections) {
                 if(sec.sectionName == sectionName) {
-                  addValue = sec.addressInLinkedSection;
+                  addValue += sec.addressInLinkedSection;
                   break;
                 }
               }
@@ -340,7 +340,7 @@ void Linker::symbolDetermination() {
         } else {
           for(auto &symbol2 : newSymbolTable) {
             if(symbol2.bind == GLOB && symbol2.sectionName == "" && symbol.bind == GLOB && symbol.name == symbol2.name) {
-              symbol2.sectionIndex = -1;
+              symbol2.sectionIndex = symbol.sectionIndex;
               symbol2.value = symbol.value;
             } else if(symbol2.bind == GLOB && symbol2.sectionName != "" && symbol.bind == GLOB && symbol.name == symbol2.name) {
               cout << "GLOBAL SYMBOL DEFINED IN MORE FILES" << endl;
@@ -518,7 +518,7 @@ void Linker::hexWrite() {
         return a.position < b.position;
       });
 
-  for (const auto& mem : memory) {
+  for(const auto& mem : memory) {
     int i = 0;
     for(uint8_t data : mem.sectionData8bitValues) {
       if(!(i % 8) && i != 0) hexFile << endl;

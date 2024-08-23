@@ -66,7 +66,6 @@ void Emulator::emulatingInstructions() {
   setRawMode(true);
   setNonBlocking(true);
   
-  bool asd = false;
   while(!end) {
     sem_wait(&mutex);
     

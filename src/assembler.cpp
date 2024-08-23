@@ -19,9 +19,9 @@ void Assembler::assemble() {
   for(struct line *currentLine = code; currentLine; currentLine = currentLine->next) {
     if(currentLine->directive) {
       if(strcmp(currentLine->directive->name, ".global") == 0) {
-        globalAssemble(currentLine->directive);
+        globalExternAssemble(currentLine->directive);
       } else if(strcmp(currentLine->directive->name, ".extern") == 0) {
-        externAssemble(currentLine->directive);
+        globalExternAssemble(currentLine->directive);
       } else if(strcmp(currentLine->directive->name, ".section") == 0) {
         sectionAssemble(currentLine->directive);
       } else if(strcmp(currentLine->directive->name, ".word") == 0) {
@@ -105,7 +105,7 @@ void Assembler::assemble() {
 }
 
 
-void Assembler::globalAssemble(struct directive *directive) {
+void Assembler::globalExternAssemble(struct directive *directive) {
   bool found = false;
 
   for(operandArgs *operand = directive->operands; operand; operand = operand->next) {
@@ -114,28 +114,6 @@ void Assembler::globalAssemble(struct directive *directive) {
         found = true;
         row.bind = GLOB;
         break;
-      }
-    }
-
-    if(!found) {
-      symbolTable.push_back({(int) symbolTable.size(), 0, NOTYP, GLOB, 0, string(operand->symbol), false, nullptr});
-    }
-  }
-}
-
-void Assembler::externAssemble(struct directive *directive) {
-  bool found = false;
-
-  for(operandArgs *operand = directive->operands; operand; operand = operand->next) {
-    for(auto &row : symbolTable) {
-      if(row.name == string(operand->symbol) && !row.defined) {
-        found = true;
-        row.bind = GLOB;
-        row.sectionIndex = 0;
-        break;
-      } else if(row.name == string(operand->symbol) && row.defined) {
-        printf("EXTERN SYMBOL CAN'T BE DEFINED HERE");
-        exit(0);
       }
     }
 
@@ -743,10 +721,10 @@ void Assembler::equBackpatch() {
   for(auto &row : equTable) {
     map<int, int> sectionsRelocatable;
 
-    for(struct operandArgs *cur = row.expresion; cur; cur = cur->next) {
+    for(operandArgs *cur = row.expresion; cur; cur = cur->next) {
       if(cur->type == symType) {
         for(auto &row2 : symbolTable) {
-          if(cur->symbol == row2.name && row2.sectionIndex != -1) {
+          if(cur->symbol == row2.name) {
             if(row2.sectionIndex == 0) {
               cout << "CAN'T USE EXTERN SYMBOLS FOR EQU" << endl;
               exit(0);
@@ -789,7 +767,7 @@ void Assembler::equBackpatch() {
       if(!equRow.done) {
         int value = 0;
         bool cantDefine = false;
-        for(struct operandArgs *cur = equRow.expresion; cur; cur = cur->next) {
+        for(operandArgs *cur = equRow.expresion; cur; cur = cur->next) {
           if(cur->type == symType) {
             bool foundSym = false;
             for(auto &symbol : symbolTable) {
@@ -1093,7 +1071,7 @@ void Assembler::elfWrite() {
   shdrs[sections.size() * 2 + 3].sh_name = strtab_offset;
   shdrs[sections.size() * 2 + 3].sh_type = SHT_STRTAB;
   shdrs[sections.size() * 2 + 3].sh_offset = offset;
-  shdrs[sections.size() * 2 + 3].sh_size = 1; // initially only null byte
+  shdrs[sections.size() * 2 + 3].sh_size = 1;
   for(const auto& sym : symbolTable) {
     shdrs[sections.size() * 2 + 3].sh_size += sym.name.size() + 1;
   }

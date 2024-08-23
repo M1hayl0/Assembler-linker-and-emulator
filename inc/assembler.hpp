@@ -79,8 +79,7 @@ public:
   Assembler(struct line *, char *);
   void assemble();
 
-  void globalAssemble(struct directive *);
-  void externAssemble(struct directive *);
+  void globalExternAssemble(struct directive *);
   void sectionAssemble(struct directive *);
   void wordAssemble(struct directive *);
   void skipAssemble(struct directive *);

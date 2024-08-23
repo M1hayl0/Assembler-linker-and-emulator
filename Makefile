@@ -1,5 +1,5 @@
 all: build assemblerAll linkerAll emulatorAll
-		
+
 build:
 	mkdir -p build
 
